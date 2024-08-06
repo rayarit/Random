@@ -8,7 +8,7 @@ from torch.utils.data import Dataset
 from nuscenes.eval.common.utils import quaternion_yaw, Quaternion
 
 class CustomNuScenesDataset(Dataset):
-    def __init__(self, queue_length=4, bev_size=(200, 200), overlap_test=False, ann_file=None, pipeline=None, data_root=None, test_mode=False, modality=None):
+    def __init__(self, queue_length=4, bev_size=(200, 200), overlap_test=False, ann_file=None, pipeline=None, data_root=None, test_mode=False, modality=None, classes=None):
         self.queue_length = queue_length
         self.overlap_test = overlap_test
         self.bev_size = bev_size
@@ -17,6 +17,7 @@ class CustomNuScenesDataset(Dataset):
         self.data_root = data_root
         self.test_mode = test_mode
         self.modality = modality or {'use_camera': True}
+        self.classes = classes
         self.data_infos = self.load_annotations(self.ann_file)
         
     def load_annotations(self, ann_file):
@@ -26,7 +27,7 @@ class CustomNuScenesDataset(Dataset):
 
     def prepare_train_data(self, index):
         queue = []
-        index_list = list(range(index-self.queue_length, index))
+        index_list = list(range(index - self.queue_length, index))
         random.shuffle(index_list)
         index_list = sorted(index_list[1:])
         index_list.append(index)
@@ -170,7 +171,6 @@ class CustomNuScenesDataset(Dataset):
         # Implement random another index if needed
         pass
 
-
     def _evaluate_single(self, result_path, logger=None, metric='bbox', result_name='pts_bbox'):
         from nuscenes import NuScenes
         self.nusc = NuScenes(version=self.version, dataroot=self.data_root, verbose=True)
@@ -206,6 +206,7 @@ class CustomNuScenesDataset(Dataset):
         detail[f'{metric_prefix}/NDS'] = metrics['nd_score']
         detail[f'{metric_prefix}/mAP'] = metrics['mean_ap']
         return detail
+
 
     def build_dataset(cfg):
     dataset_type = cfg['type']
