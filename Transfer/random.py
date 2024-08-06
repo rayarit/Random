@@ -171,6 +171,43 @@ class CustomNuScenesDataset(Dataset):
         pass
 
 
+    def _evaluate_single(self, result_path, logger=None, metric='bbox', result_name='pts_bbox'):
+        from nuscenes import NuScenes
+        self.nusc = NuScenes(version=self.version, dataroot=self.data_root, verbose=True)
+        output_dir = os.path.join(*os.path.split(result_path)[:-1])
+        eval_set_map = {
+            'v1.0-mini': 'mini_val',
+            'v1.0-trainval': 'val',
+        }
+        self.nusc_eval = NuScenesEval_custom(
+            self.nusc,
+            config=self.eval_detection_configs,
+            result_path=result_path,
+            eval_set=eval_set_map[self.version],
+            output_dir=output_dir,
+            verbose=True,
+            overlap_test=self.overlap_test,
+            data_infos=self.data_infos
+        )
+        self.nusc_eval.main(plot_examples=0, render_curves=False)
+        metrics = json.load(open(os.path.join(output_dir, 'metrics_summary.json')))
+        detail = dict()
+        metric_prefix = f'{result_name}_NuScenes'
+        for name in self.classes:
+            for k, v in metrics['label_aps'][name].items():
+                val = float('{:.4f}'.format(v))
+                detail[f'{metric_prefix}/{name}_AP_dist_{k}'] = val
+            for k, v in metrics['label_tp_errors'][name].items():
+                val = float('{:.4f}'.format(v))
+                detail[f'{metric_prefix}/{name}_{k}'] = val
+            for k, v in metrics['tp_errors'].items():
+                val = float('{:.4f}'.format(v))
+                detail[f'{metric_prefix}/{self.ErrNameMapping[k]}'] = val
+        detail[f'{metric_prefix}/NDS'] = metrics['nd_score']
+        detail[f'{metric_prefix}/mAP'] = metrics['mean_ap']
+        return detail
+
+
 
 ##=====================================================
 
