@@ -207,6 +207,21 @@ class CustomNuScenesDataset(Dataset):
         detail[f'{metric_prefix}/mAP'] = metrics['mean_ap']
         return detail
 
+    def build_dataset(cfg):
+    dataset_type = cfg['type']
+    if dataset_type == 'CustomNuScenesDataset':
+        return CustomNuScenesDataset(
+            ann_file=cfg['ann_file'],
+            pipeline=cfg['pipeline'],
+            data_root=cfg.get('data_root', None),
+            test_mode=cfg.get('test_mode', False),
+            modality=cfg.get('modality', None),
+            classes=cfg.get('classes', None)
+        )
+    else:
+        raise ValueError(f"Unknown dataset type: {dataset_type}")
+
+
 
 
 ##=====================================================
