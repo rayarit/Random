@@ -577,3 +577,34 @@ log_config = dict(
     ])
 
 checkpoint_config = dict(interval=4)
+
+
+##================================= loading.py
+
+def alternative_imread(img_or_path: Union[np.ndarray, str], flag: str = 'color', channel_order: str = 'bgr') -> np.ndarray:
+    if isinstance(img_or_path, np.ndarray):
+        return img_or_path
+
+    if flag == 'color':
+        cv2_flag = cv2.IMREAD_COLOR
+    elif flag == 'grayscale':
+        cv2_flag = cv2.IMREAD_GRAYSCALE
+    elif flag == 'unchanged':
+        cv2_flag = cv2.IMREAD_UNCHANGED
+    else:
+        raise ValueError(f"Unsupported flag: {flag}")
+
+    img = cv2.imread(img_or_path, cv2_flag)
+
+    if img is None:
+        raise FileNotFoundError(f"Image file '{img_or_path}' not found.")
+
+    if channel_order == 'rgb' and flag == 'color':
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    
+    return img
+
+def calculate_rmse(image1: np.ndarray, image2: np.ndarray) -> float:
+    return np.sqrt(((image1 - image2) ** 2).mean())
+
+
