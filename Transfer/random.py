@@ -1,5 +1,70 @@
 import pandas as pd
 from bs4 import BeautifulSoup
+import re
+
+# Load the HTML file
+html_file = '/path/to/your/file.html'
+with open(html_file, 'r') as file:
+    soup = BeautifulSoup(file, 'html.parser')
+
+# Find all rows in the table
+rows = soup.find_all('tr')
+
+# Initialize a dictionary to store the data
+data = []
+
+# Iterate over each row in the table
+for row in rows:
+    cols = row.find_all('td')
+    cols = [ele.text.strip() for ele in cols]
+    
+    if len(cols) > 0:
+        # Extract the common part of the layer name
+        match = re.match(r'^(.*_layers_)(\d+)(_attentions_0)(.*)', cols[0])
+        if match:
+            common_prefix = match.group(1)
+            layer_number = match.group(2)
+            common_suffix = match.group(3)
+            rest_of_name = match.group(4)
+            cos_similarity = cols[3] if len(cols) > 3 else None
+            sqnr = cols[4] if len(cols) > 4 else None
+            mse = cols[5] if len(cols) > 5 else None
+            
+            # Append the data to the dictionary
+            data.append({
+                'Common Layer Name': common_prefix + common_suffix + rest_of_name,
+                f'Layer {layer_number} Name': common_prefix + layer_number + common_suffix + rest_of_name,
+                f'Layer {layer_number} Cosine Similarity': cos_similarity,
+                f'Layer {layer_number} SQNR': sqnr,
+                f'Layer {layer_number} MSE': mse
+            })
+
+# Convert the list of dictionaries to a DataFrame
+df = pd.DataFrame(data)
+
+# Reorder columns: start with "Common Layer Name" followed by columns related to each layer
+ordered_columns = ['Common Layer Name']
+for i in range(5):  # Assuming layers 0 to 4
+    ordered_columns.extend([
+        f'Layer {i} Name', 
+        f'Layer {i} Cosine Similarity', 
+        f'Layer {i} SQNR', 
+        f'Layer {i} MSE'
+    ])
+
+df = df[ordered_columns]
+
+# Save the DataFrame to an Excel file
+output_file = 'layer_analysis_grouped_output.xlsx'
+df.to_excel(output_file, index=False)
+
+print(f"Layer analysis data has been extracted and saved to {output_file}")
+
+
+
+##==================================================================
+import pandas as pd
+from bs4 import BeautifulSoup
 
 # Load the HTML file
 html_file = '/path/to/your/file.html'
