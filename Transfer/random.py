@@ -11,6 +11,75 @@ with open(html_file, 'r') as file:
 rows = soup.find_all('tr')
 
 # Initialize a dictionary to store the data
+data = {}
+
+# Iterate over each row in the table
+for row in rows:
+    cols = row.find_all('td')
+    cols = [ele.text.strip() for ele in cols]
+    
+    if len(cols) > 0:
+        # Extract the common part and specific part of the layer name
+        match = re.match(r'^(.*_layers_)(\d+)(_attentions_0)(.*)', cols[0])
+        if match:
+            common_prefix = match.group(1)
+            layer_number = match.group(2)
+            common_suffix = match.group(3)
+            rest_of_name = match.group(4)
+            cos_similarity = cols[3] if len(cols) > 3 else None
+            sqnr = cols[4] if len(cols) > 4 else None
+            mse = cols[5] if len(cols) > 5 else None
+            
+            # Create a key for the common part of the name
+            common_layer_name = common_prefix + common_suffix + rest_of_name
+            
+            # Initialize the row if the common layer name hasn't been added yet
+            if common_layer_name not in data:
+                data[common_layer_name] = {}
+            
+            # Add data to the corresponding layer columns
+            data[common_layer_name][f'Layer {layer_number} Name'] = common_prefix + layer_number + common_suffix + rest_of_name
+            data[common_layer_name][f'Layer {layer_number} Cosine Similarity'] = cos_similarity
+            data[common_layer_name][f'Layer {layer_number} SQNR'] = sqnr
+            data[common_layer_name][f'Layer {layer_number} MSE'] = mse
+
+# Convert the dictionary to a DataFrame
+df = pd.DataFrame.from_dict(data, orient='index')
+
+# Create a list of ordered columns to ensure proper alignment in the final DataFrame
+ordered_columns = []
+for i in range(5):  # Assuming layers 0 to 4
+    ordered_columns.extend([
+        f'Layer {i} Name', 
+        f'Layer {i} Cosine Similarity', 
+        f'Layer {i} SQNR', 
+        f'Layer {i} MSE'
+    ])
+
+# Ensure that the DataFrame columns are in the correct order
+df = df[ordered_columns]
+
+# Save the DataFrame to an Excel file
+output_file = 'layer_analysis_grouped_output.xlsx'
+df.to_excel(output_file, index=True)
+
+print(f"Layer analysis data has been extracted and saved to {output_file}")
+
+
+##========================================
+import pandas as pd
+from bs4 import BeautifulSoup
+import re
+
+# Load the HTML file
+html_file = '/path/to/your/file.html'
+with open(html_file, 'r') as file:
+    soup = BeautifulSoup(file, 'html.parser')
+
+# Find all rows in the table
+rows = soup.find_all('tr')
+
+# Initialize a dictionary to store the data
 data = []
 
 # Iterate over each row in the table
