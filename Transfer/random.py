@@ -1,3 +1,45 @@
+
+import pandas as pd
+from bs4 import BeautifulSoup
+
+# Load the HTML file
+html_file = '/path/to/your/file.html'
+with open(html_file, 'r') as file:
+    soup = BeautifulSoup(file, 'html.parser')
+
+# Find all rows in the table
+rows = soup.find_all('tr')
+
+# Initialize a list to store the extracted data
+data = []
+
+# Iterate over each row in the table
+for row in rows:
+    cols = row.find_all('td')
+    cols = [ele.text.strip() for ele in cols]
+    
+    # Check if the Name column contains 'layers_0_attentions_0'
+    if len(cols) > 0 and 'layers_0_attentions_0' in cols[0]:
+        layer_name = cols[0].split('layers_0_attentions_0')[0]
+        cos_similarity = cols[3]
+        sqnr = cols[4]
+        mse = cols[5]
+        
+        # Append the extracted data to the list
+        data.append([layer_name, cos_similarity, sqnr, mse])
+
+# Create a DataFrame from the extracted data
+df = pd.DataFrame(data, columns=['Layer Name', 'Cosine Similarity', 'SQNR', 'MSE'])
+
+# Save the DataFrame to an Excel file
+output_file = 'output_layers.xlsx'
+df.to_excel(output_file, index=False)
+
+print(f"Data has been extracted and saved to {output_file}")
+
+
+
+###=============================================================================
 import os
 import copy
 import json
