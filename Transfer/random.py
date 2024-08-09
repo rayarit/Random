@@ -1,4 +1,54 @@
+import pandas as pd
+from bs4 import BeautifulSoup
 
+# Load the HTML file
+html_file = '/path/to/your/file.html'
+with open(html_file, 'r') as file:
+    soup = BeautifulSoup(file, 'html.parser')
+
+# Find all rows in the table
+rows = soup.find_all('tr')
+
+# Initialize a dictionary to store the extracted data by layer
+data = {f'layer_{i}_attention_0': [] for i in range(5)}
+
+# Iterate over each row in the table
+for row in rows:
+    cols = row.find_all('td')
+    cols = [ele.text.strip() for ele in cols]
+    
+    # Loop over the 5 layers to check if they are in the Name column
+    for i in range(5):
+        layer_pattern = f'layers_{i}_attentions_0'
+        if len(cols) > 0 and layer_pattern in cols[0]:
+            # Extract relevant data
+            layer_name = cols[0]
+            cos_similarity = cols[3]
+            sqnr = cols[4]
+            mse = cols[5]
+            
+            # Append the data to the corresponding layer's list
+            data[layer_pattern].append([layer_name, cos_similarity, sqnr, mse])
+
+# Prepare a DataFrame for each layer and concatenate them
+final_data = []
+for layer, values in data.items():
+    df_layer = pd.DataFrame(values, columns=['Layer Name', 'Cosine Similarity', 'SQNR', 'MSE'])
+    df_layer['Attention Layer'] = layer
+    final_data.append(df_layer)
+
+# Combine all the layer data into a single DataFrame
+df_final = pd.concat(final_data, ignore_index=True)
+
+# Save the final DataFrame to an Excel file
+output_file = 'layer_analysis_output.xlsx'
+df_final.to_excel(output_file, index=False)
+
+print(f"Layer analysis data has been extracted and saved to {output_file}")
+
+
+
+##=======================
 import pandas as pd
 from bs4 import BeautifulSoup
 
