@@ -1,3 +1,17 @@
+# Normalize using mmcv.imnormalize
+        mmcv_normalized_imgs = [mmcv.imnormalize(img, self.mean, self.std, self.to_rgb) for img in results['img']]
+        
+        # Normalize using custom imnormalize
+        custom_normalized_imgs = [imnormalize(img, self.mean, self.std, self.to_rgb) for img in results['img']]
+        
+        # Calculate RMSE between the two normalization results
+        rmses = [np.sqrt(mean_squared_error(mmcv_img.flatten(), custom_img.flatten())) 
+                 for mmcv_img, custom_img in zip(mmcv_normalized_imgs, custom_normalized_imgs)]
+        
+        print(f"RMSE between mmcv.imnormalize and custom imnormalize: {rmses}")
+
+
+##====================================================================
 import pandas as pd
 from bs4 import BeautifulSoup
 import re
