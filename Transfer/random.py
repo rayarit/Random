@@ -1,3 +1,142 @@
+
+import numpy as np
+import cv2
+import mmcv
+from sklearn.metrics import mean_squared_error
+from typing import Tuple, Optional, Union
+from PIL import Image
+
+#Global variable for the backend
+imread_backend = 'cv2'  # Default backend
+
+cv2_interp_codes = {
+    'nearest': cv2.INTER_NEAREST,
+    'bilinear': cv2.INTER_LINEAR,
+    'bicubic': cv2.INTER_CUBIC,
+    'area': cv2.INTER_AREA,
+    'lanczos': cv2.INTER_LANCZOS4
+}
+
+cv2_border_modes = {
+    'constant': cv2.BORDER_CONSTANT,
+    'replicate': cv2.BORDER_REPLICATE,
+    'reflect': cv2.BORDER_REFLECT,
+    'wrap': cv2.BORDER_WRAP,
+    'reflect_101': cv2.BORDER_REFLECT_101,
+    'transparent': cv2.BORDER_TRANSPARENT,
+    'isolated': cv2.BORDER_ISOLATED
+}
+
+# Pillow >=v9.1.0 use a slightly different naming scheme for filters.
+# Set pillow_interp_codes according to the naming scheme used.
+if Image is not None:
+    if hasattr(Image, 'Resampling'):
+        pillow_interp_codes = {
+            'nearest': Image.Resampling.NEAREST,
+            'bilinear': Image.Resampling.BILINEAR,
+            'bicubic': Image.Resampling.BICUBIC,
+            'box': Image.Resampling.BOX,
+            'lanczos': Image.Resampling.LANCZOS,
+            'hamming': Image.Resampling.HAMMING
+        }
+    else:
+        pillow_interp_codes = {
+            'nearest': Image.NEAREST,
+            'bilinear': Image.BILINEAR,
+            'bicubic': Image.BICUBIC,
+            'box': Image.BOX,
+            'lanczos': Image.LANCZOS,
+            'hamming': Image.HAMMING
+        }
+
+
+def imresize(
+    img: np.ndarray,
+    size: Tuple[int, int],
+    return_scale: bool = False,
+    interpolation: str = 'bilinear',
+    out: Optional[np.ndarray] = None,
+    backend: Optional[str] = None
+) -> Union[Tuple[np.ndarray, float, float], np.ndarray]:
+    h, w = img.shape[:2]
+    if backend is None:
+        backend = imread_backend
+    if backend not in ['cv2', 'pillow']:
+        raise ValueError(f'backend: {backend} is not supported for resize.'
+                         f"Supported backends are 'cv2', 'pillow'")
+
+    if backend == 'pillow':
+        assert img.dtype == np.uint8, 'Pillow backend only support uint8 type'
+        pil_image = Image.fromarray(img)
+        pil_image = pil_image.resize(size, pillow_interp_codes[interpolation])
+        resized_img = np.array(pil_image)
+    else:
+        resized_img = cv2.resize(
+            img, size, dst=out, interpolation=cv2_interp_codes[interpolation])
+    if not return_scale:
+        return resized_img
+    else:
+        w_scale = size[0] / w
+        h_scale = size[1] / h
+        return resized_img, w_scale, h_scale
+        
+        
+class RandomScaleImageMultiViewImage(object):
+    """Random scale the image.
+    Args:
+        scales (list): List of scaling factors.
+    """
+
+    def __init__(self, scales=[]):
+        self.scales = scales
+        assert len(self.scales) == 1
+
+    def __call__(self, results):
+        """Call function to resize images.
+        Args:
+            results (dict): Result dict from loading pipeline.
+        Returns:
+            dict: Updated result dict.
+        """
+        rand_ind = np.random.permutation(range(len(self.scales)))[0]
+        rand_scale = self.scales[rand_ind]
+
+        y_size = [int(img.shape[0] * rand_scale) for img in results['img']]
+        x_size = [int(img.shape[1] * rand_scale) for img in results['img']]
+        scale_factor = np.eye(4)
+        scale_factor[0, 0] *= rand_scale
+        scale_factor[1, 1] *= rand_scale
+        
+        # Resize using mmcv.imresize
+        mmcv_resized_imgs = [
+            mmcv.imresize(img, (x_size[idx], y_size[idx]), return_scale=False)
+            for idx, img in enumerate(results['img'])
+        ]
+        
+        # Resize using custom imresize
+        custom_resized_imgs = [
+            imresize(img, (x_size[idx], y_size[idx]), return_scale=False)
+            for idx, img in enumerate(results['img'])
+        ]
+
+        # Calculate RMSE between the two resizing results
+        rmses = [
+            np.sqrt(mean_squared_error(mmcv_img.flatten(), custom_img.flatten())) 
+            for mmcv_img, custom_img in zip(mmcv_resized_imgs, custom_resized_imgs)
+        ]
+        
+        print(f"RMSE between mmcv.imresize and custom imresize: {rmses}")
+
+        # Optionally, decide which resized images to use (e.g., using custom)
+        results['img'] = custom_resized_imgs  # or mmcv_resized_imgs based on your needs
+        lidar2img = [scale_factor @ l2i for l2i in results['lidar2img']]
+        results['lidar2img'] = lidar2img
+        results['img_shape'] = [img.shape for img in results['img']]
+        results['ori_shape'] = [img.shape for img in results['img']]
+
+        return results
+
+###========================================================================================================
 # Normalize using mmcv.imnormalize
         mmcv_normalized_imgs = [mmcv.imnormalize(img, self.mean, self.std, self.to_rgb) for img in results['img']]
         
