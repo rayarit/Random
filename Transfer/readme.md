@@ -192,3 +192,16 @@ if [ -f "$HOME/anaconda3/etc/profile.d/conda.sh" ]; then
 fi
 
 
+##======================
+
+echo 'export PATH="$PATH:/usr/local/cuda-11.7/bin"' >> ~/.bashrc
+echo 'export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/local/cuda-11.7/lib64"' >> ~/.bashrc
+echo 'export CUDA_HOME="/usr/local/cuda-11.7"' >> ~/.bashrc
+source ~/.bashrc
+##================
+
+echo 'export PATH="/path/to/conda/env/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+
+
+
