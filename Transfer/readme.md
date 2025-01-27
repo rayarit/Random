@@ -170,3 +170,25 @@ class CustomNuScenesDataset(Dataset):
         # Implement random another index if needed
         pass
 
+
+##============================================
+
+# Custom aliases
+alias ll='ls -la'
+alias python='python3'
+alias pip='pip3'
+
+# Add custom paths
+export PATH="$HOME/bin:$HOME/.local/bin:$PATH"
+
+# Enable colors in terminal
+export LS_COLORS="di=34:ln=36:so=32:pi=33:ex=31"
+export PS1="\u@\h:\w$ "
+
+# Load Anaconda (later)
+if [ -f "$HOME/anaconda3/etc/profile.d/conda.sh" ]; then
+    . "$HOME/anaconda3/etc/profile.d/conda.sh"
+    conda activate base
+fi
+
+
