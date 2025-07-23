@@ -1,3 +1,11 @@
+I've updated the feature list to include the fields from the three tables you shared. Some are derived as part of the feature exploration process. Attached is the updated sheet.
+
+Regarding rpt_kypbase_1, it's a table created by the PCO dashboard team and joins DIM_DEMOGRAPHICS, DIM_LOCATION_ORG, and DIM_CONTRACT to provide key member-level attributes.
+
+
+
+
+
 
 """
 Created on Tuesday 02 April 2024
