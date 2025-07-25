@@ -1,3 +1,15 @@
+
+Subject: Update on HH Retraining & Data Transfer Discussion
+
+Hi John,
+
+I wanted to share a quick update on the HH retraining work. I’ve completed the data engineering part, and the feature generation scripts are currently running.
+
+Additionally, I spoke with Prashant regarding the data transfer between Snowflake and Databricks — either directly or via Azure Synapse Analytics (ASA). He mentioned that it’s possible using an ODBC connector, but I’ll need access to the Databricks workspace first. He also said he’ll walk me through the full pipeline on Monday.
+
+Let me know if you need any more details.
+
+##=========================================================
 from snowflake.snowpark import Session
 from snowflake.snowpark.functions import col, count, count_distinct, isnan, sum as snow_sum
 import pandas as pd
