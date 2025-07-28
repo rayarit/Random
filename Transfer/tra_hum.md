@@ -1,5 +1,22 @@
 
 
+Subject: Feature Engineering Update & Snowflake Access Issue
+
+Hi [Recipient Name],
+
+I’ve completed the feature engineering phase.
+Here’s a quick summary of the updates:
+
+Removed features: cons_lwcm10, cons_lwcm03
+
+Retained: cons_apt, after excluding values M (private mail box), T (mobile home park), and W (slip or marina)
+
+Regarding the Snowflake–Databricks transformation:
+
+I spoke with Dhivakar via Prasant, and he shared a code snippet (link attached). However, I'm still encountering the same connection issue. It seems like the issue may be related to access permissions, and might require action from the administrator side.
+
+Let me know how to proceed or whom to reach out to for access.
+
 
 ##=========================================================
 from snowflake.snowpark import Session
