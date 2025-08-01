@@ -1,3 +1,44 @@
+%%pyspark
+
+# --- Imports ---
+from pyspark.sql import functions as F
+from pyspark.sql.types import *
+
+# --- Variables ---
+pDatabaseName = "dedicatedp1"
+pSchemaName = "dbo"
+pTableName = "cwp_2025Q3_prediction_16_july"
+filePath = "abfss://edpa-hr-mktg-1-prod@edpashrdasasa0prod0.dfs.core.windows.net/rayari_mktg/cwp_2025Q3_prediction_16_july"
+
+# --- Read Parquet ---
+df = spark.read.parquet(filePath)
+
+# --- Print Schema (for debugging) ---
+df.printSchema()
+
+# --- Drop Columns with All Nulls ---
+non_null_cols = [c for c in df.columns if df.select(F.col(c)).distinct().count() > 1 or df.filter(F.col(c).isNotNull()).count() > 0]
+df = df.select(*non_null_cols)
+
+# --- Rename reserved word column if needed ---
+# Example: Rename 'Group' to 'score_group' if present
+if 'Group' in df.columns:
+    df = df.withColumnRenamed('Group', 'score_group')
+
+# --- Select Columns explicitly (adjust as needed) ---
+# This helps avoid hidden nested or complex types
+selected_cols = [
+    "CWHH_CENTER", "H_NBR", "END_ZIP_CD", "DISTANCE",
+    "MEMBERS_WITHIN_25_MILES", "MEMBERS_WITHIN_10_MILES",
+    "MEMBERS_WITHIN_50_MILES", "prediction", "score_group"
+]
+df = df.select(*[c for c in selected_cols if c in df.columns])
+
+# --- Show a sample for sanity check ---
+df.show(5)
+
+# --- Write to Synapse ---
+df.write.mode("overwrite").synapsesql(f"{pDatabaseName}.{pSchemaName}.[{pTableName}]")
 
 
 ##=========================================================
