@@ -1,55 +1,20 @@
-%%spark
+CREATE TABLE member_data (
+    sdr_person_id            NUMBER(10),
+    propensity_score         NUMBER(18,17),
+    group_label              VARCHAR2(20),
+    mbr_pers_gen_key         NUMBER(12),
+    idcard_mbr_id            VARCHAR2(20),
+    start_zip_cd             VARCHAR2(10),
+    cwhh_center              VARCHAR2(100),
+    h_nbr                    VARCHAR2(10),
+    end_zip_cd               VARCHAR2(10),
+    distance                 NUMBER(5,2),
+    members_within_25_miles VARCHAR2(3),
+    members_within_10_miles VARCHAR2(3),
+    members_within_50_miles VARCHAR2(3)
+);
 
-import com.microsoft.spark.sqlanalytics.utils.Constants
-import org.apache.spark.sql._
-import org.apache.spark.sql.functions._
-
-// --- Variables ---
-val pDatabaseName = "dedicatedp1"
-val pSchemaName = "dbo"
-val pTableName = "cwp_2025Q3_prediction_16_july"
-val filePath = "abfss://edpa-hr-mktg-1-prod@edpashrdasasa0prod0.dfs.core.windows.net/rayari_mktg/cwp_2025Q3_prediction_16_july"
-
-// --- Read Parquet ---
-var df = spark.read.parquet(filePath)
-
-// --- Print Schema ---
-df.printSchema()
-
-// --- Drop All-Null Columns ---
-val nonNullCols = df.columns.filter(c => df.filter(col(c).isNotNull).count() > 0)
-df = df.select(nonNullCols.map(col): _*)
-
-// --- Rename reserved word 'Group' to 'score_group' if needed ---
-if (df.columns.contains("Group")) {
-  df = df.withColumnRenamed("Group", "score_group")
-}
-
-// --- Select only safe columns (adjust list as needed) ---
-val selectedCols = Seq(
-  "sdr_person_id", "propensity_score", "decile", "Group_label",
-  "MBR_PERS_GEN_KEY", "IDCARD_MBR_ID", "START_ZIP_CD",
-  "CWHH_CENTER", "H_NBR", "END_ZIP_CD", "DISTANCE",
-  "MEMBERS_WITHIN_25_MILES", "MEMBERS_WITHIN_10_MILES",
-  "MEMBERS_WITHIN_50_MILES", "prediction", "score_group"
-).filter(df.columns.contains)  // only keep those that exist
-
-df = df.select(selectedCols.map(col): _*)
-
-// --- Show sample ---
-df.show(5)
-
-// --- Write to Synapse ---
-df.write
-  .mode("overwrite")
-  .synapsesql(s"$pDatabaseName.$pSchemaName.[$pTableName]")
-
-
-##=========================================================
-from snowflake.snowpark import Session
-from snowflake.snowpark.functions import col, count, count_distinct, isnan, sum as snow_sum
-import pandas as pd
-
+##========================================
 # --- Configure your connection parameters ---
 connection_parameters = {
     'account': '<YOUR_ACCOUNT>',
