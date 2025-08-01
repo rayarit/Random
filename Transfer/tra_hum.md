@@ -1,44 +1,48 @@
-%%pyspark
+%%spark
 
-# --- Imports ---
-from pyspark.sql import functions as F
-from pyspark.sql.types import *
+import com.microsoft.spark.sqlanalytics.utils.Constants
+import org.apache.spark.sql._
+import org.apache.spark.sql.functions._
 
-# --- Variables ---
-pDatabaseName = "dedicatedp1"
-pSchemaName = "dbo"
-pTableName = "cwp_2025Q3_prediction_16_july"
-filePath = "abfss://edpa-hr-mktg-1-prod@edpashrdasasa0prod0.dfs.core.windows.net/rayari_mktg/cwp_2025Q3_prediction_16_july"
+// --- Variables ---
+val pDatabaseName = "dedicatedp1"
+val pSchemaName = "dbo"
+val pTableName = "cwp_2025Q3_prediction_16_july"
+val filePath = "abfss://edpa-hr-mktg-1-prod@edpashrdasasa0prod0.dfs.core.windows.net/rayari_mktg/cwp_2025Q3_prediction_16_july"
 
-# --- Read Parquet ---
-df = spark.read.parquet(filePath)
+// --- Read Parquet ---
+var df = spark.read.parquet(filePath)
 
-# --- Print Schema (for debugging) ---
+// --- Print Schema ---
 df.printSchema()
 
-# --- Drop Columns with All Nulls ---
-non_null_cols = [c for c in df.columns if df.select(F.col(c)).distinct().count() > 1 or df.filter(F.col(c).isNotNull()).count() > 0]
-df = df.select(*non_null_cols)
+// --- Drop All-Null Columns ---
+val nonNullCols = df.columns.filter(c => df.filter(col(c).isNotNull).count() > 0)
+df = df.select(nonNullCols.map(col): _*)
 
-# --- Rename reserved word column if needed ---
-# Example: Rename 'Group' to 'score_group' if present
-if 'Group' in df.columns:
-    df = df.withColumnRenamed('Group', 'score_group')
+// --- Rename reserved word 'Group' to 'score_group' if needed ---
+if (df.columns.contains("Group")) {
+  df = df.withColumnRenamed("Group", "score_group")
+}
 
-# --- Select Columns explicitly (adjust as needed) ---
-# This helps avoid hidden nested or complex types
-selected_cols = [
-    "CWHH_CENTER", "H_NBR", "END_ZIP_CD", "DISTANCE",
-    "MEMBERS_WITHIN_25_MILES", "MEMBERS_WITHIN_10_MILES",
-    "MEMBERS_WITHIN_50_MILES", "prediction", "score_group"
-]
-df = df.select(*[c for c in selected_cols if c in df.columns])
+// --- Select only safe columns (adjust list as needed) ---
+val selectedCols = Seq(
+  "sdr_person_id", "propensity_score", "decile", "Group_label",
+  "MBR_PERS_GEN_KEY", "IDCARD_MBR_ID", "START_ZIP_CD",
+  "CWHH_CENTER", "H_NBR", "END_ZIP_CD", "DISTANCE",
+  "MEMBERS_WITHIN_25_MILES", "MEMBERS_WITHIN_10_MILES",
+  "MEMBERS_WITHIN_50_MILES", "prediction", "score_group"
+).filter(df.columns.contains)  // only keep those that exist
 
-# --- Show a sample for sanity check ---
+df = df.select(selectedCols.map(col): _*)
+
+// --- Show sample ---
 df.show(5)
 
-# --- Write to Synapse ---
-df.write.mode("overwrite").synapsesql(f"{pDatabaseName}.{pSchemaName}.[{pTableName}]")
+// --- Write to Synapse ---
+df.write
+  .mode("overwrite")
+  .synapsesql(s"$pDatabaseName.$pSchemaName.[$pTableName]")
 
 
 ##=========================================================
