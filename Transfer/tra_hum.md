@@ -1,20 +1,11 @@
-CREATE TABLE member_data (
-    sdr_person_id              VARCHAR2(4000),
-    propensity_score           FLOAT,
-    decile                     NUMBER(10),
-    group_label                VARCHAR2(4000),
-    mbr_pers_gen_key           VARCHAR2(4000),
-    idcard_mbr_id              VARCHAR2(4000),
-    start_zip_cd               VARCHAR2(4000),
-    cwhh_center                VARCHAR2(4000),
-    h_nbr                      VARCHAR2(4000),
-    end_zip_cd                 VARCHAR2(4000),
-    distance                   FLOAT,
-    members_within_25_miles    VARCHAR2(4000),
-    members_within_10_miles    VARCHAR2(4000),
-    members_within_50_miles    VARCHAR2(4000),
-    prediction                 FLOAT
-);
+Hi [Recipient's Name],
+
+Thanks for pointing this out.
+
+I’ve rechecked the original output, and the propensity scores and deciles were correct. This issue happened during CSV export — the data got slightly altered due to rounding inconsistencies and minor data corruption.
+
+Previously, I wasn’t able to transfer the data directly from ASA to Oracle. Now it's been successfully transferred, and the table name is:
+AYR2733.cwp_2025Q3_prediction_16_july.
 
 
 ##========================================
