@@ -1,18 +1,21 @@
 CREATE TABLE member_data (
-    sdr_person_id            NUMBER(10),
-    propensity_score         NUMBER(18,17),
-    group_label              VARCHAR2(20),
-    mbr_pers_gen_key         NUMBER(12),
-    idcard_mbr_id            VARCHAR2(20),
-    start_zip_cd             VARCHAR2(10),
-    cwhh_center              VARCHAR2(100),
-    h_nbr                    VARCHAR2(10),
-    end_zip_cd               VARCHAR2(10),
-    distance                 NUMBER(5,2),
-    members_within_25_miles VARCHAR2(3),
-    members_within_10_miles VARCHAR2(3),
-    members_within_50_miles VARCHAR2(3)
+    sdr_person_id              VARCHAR2(4000),
+    propensity_score           FLOAT,
+    decile                     NUMBER(10),
+    group_label                VARCHAR2(4000),
+    mbr_pers_gen_key           VARCHAR2(4000),
+    idcard_mbr_id              VARCHAR2(4000),
+    start_zip_cd               VARCHAR2(4000),
+    cwhh_center                VARCHAR2(4000),
+    h_nbr                      VARCHAR2(4000),
+    end_zip_cd                 VARCHAR2(4000),
+    distance                   FLOAT,
+    members_within_25_miles    VARCHAR2(4000),
+    members_within_10_miles    VARCHAR2(4000),
+    members_within_50_miles    VARCHAR2(4000),
+    prediction                 FLOAT
 );
+
 
 ##========================================
 # --- Configure your connection parameters ---
