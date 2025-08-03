@@ -1,4 +1,22 @@
+CREATE TABLE your_table_name (
+    sdr_person_id NVARCHAR2(4000),
+    propensity_score REAL,
+    decile INTEGER,
+    Group_label NVARCHAR2(4000),
+    MBR_PERS_GEN_KEY NVARCHAR2(4000),
+    IDCARD_MBR_ID NVARCHAR2(4000),
+    START_ZIP_CD NVARCHAR2(4000),
+    CWHH_CENTER NVARCHAR2(4000),
+    H_NBR NVARCHAR2(4000),
+    END_ZIP_CD NVARCHAR2(4000),
+    DISTANCE FLOAT,
+    MEMBERS_WITHIN_25_MILES NVARCHAR2(4000),
+    MEMBERS_WITHIN_10_MILES NVARCHAR2(4000),
+    MEMBERS_WITHIN_50_MILES NVARCHAR2(4000),
+    prediction FLOAT
+);
 
+GRANT ALL ON your_table_name TO TEAMS;
 ##========================================
 # --- Configure your connection parameters ---
 connection_parameters = {
