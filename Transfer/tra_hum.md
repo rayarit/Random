@@ -1,12 +1,3 @@
-Hi [Recipient's Name],
-
-Thanks for pointing this out.
-
-I’ve rechecked the original output, and the propensity scores and deciles were correct. This issue happened during CSV export — the data got slightly altered due to rounding inconsistencies and minor data corruption.
-
-Previously, I wasn’t able to transfer the data directly from ASA to Oracle. Now it's been successfully transferred, and the table name is:
-AYR2733.cwp_2025Q3_prediction_16_july.
-
 
 ##========================================
 # --- Configure your connection parameters ---
