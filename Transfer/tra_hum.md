@@ -1,3 +1,29 @@
+
+%%spark
+import org.apache.spark.sql.functions._
+
+// Define table names
+val sourceTable     = "cwp_2025Q3_prediction_16_july_1"
+val filterTable     = "testing_sdr_only"
+val outputTableName = "filtered_prediction_result"
+
+// Read both tables
+val dfMain   = spark.read.synapsesql("dedicatedp1.dbo." + sourceTable)
+val dfFilter = spark.read.synapsesql("dedicatedp1.dbo." + filterTable)
+
+// Filter: Exclude SDR_PERSON_IDs found in dfFilter
+val dfFiltered = dfMain.join(dfFilter, Seq("SDR_PERSON_ID"), "left_anti")
+
+// Save as a new table
+dfFiltered.write
+  .mode("overwrite")
+  .saveAsTable("dbo." + outputTableName)
+
+// Confirm count
+println(s"Filtered row count: ${dfFiltered.count()}")
+
+
+##==================================================
 CREATE TABLE your_table_name (
     sdr_person_id NVARCHAR2(4000),
     propensity_score REAL,
