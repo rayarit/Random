@@ -1,12 +1,12 @@
-I've updated the feature list to include the fields from the three tables you shared. Some are derived as part of the feature exploration process. Attached is the updated sheet.
+,
 
-Regarding rpt_kypbase_1, it's a table created by the PCO dashboard team and joins DIM_DEMOGRAPHICS, DIM_LOCATION_ORG, and DIM_CONTRACT to provide key member-level attributes.
+Just a quick update:
 
+Feature engineering is done: removed cons_pdpe, and excluded values M, T, W from cons_apt.
 
+Drift analysis completed using KS test — 28 features showed significant drift (p < 0.05), including COMM_RECENT_LAGGED, email_cnt_lag, rx_overall_pmpm_cost, etc.
 
-
-
-
+Next: I’ll stack 2024Q4, 2024Q1, and 2025Q2 data, then begin training.
 """
 Created on Tuesday 02 April 2024
 @author: Azad Md Abulkalam
@@ -1055,5 +1055,6 @@ def alternative_imread(img_or_path: Union[np.ndarray, str], flag: str = 'color',
 
 def calculate_rmse(image1: np.ndarray, image2: np.ndarray) -> float:
     return np.sqrt(((image1 - image2) ** 2).mean())
+
 
 
