@@ -1,18 +1,61 @@
-,
+import numpy as np
+import pandas as pd
+from evidently.report import Report
 
-Just a quick update:
+def drift_table_from_report(rep: Report) -> pd.DataFrame:
+    res = rep.as_dict()
+    rows = []
 
-Feature engineering is done: removed cons_pdpe, and excluded values M, T, W from cons_apt.
+    for sec in res.get("metrics", []):
+        result = sec.get("result", {}) or {}
+        # 0.4.x uses "drift_by_columns"; some versions expose different keys
+        by_cols = (result.get("drift_by_columns")
+                   or result.get("columns")
+                   or {})
 
-Drift analysis completed using KS test — 28 features showed significant drift (p < 0.05), including COMM_RECENT_LAGGED, email_cnt_lag, rx_overall_pmpm_cost, etc.
+        for col, info in (by_cols or {}).items():
+            # p_value can be float/None/"N/A"
+            p = info.get("p_value", None)
+            try:
+                p = float(p)
+            except (TypeError, ValueError):
+                p = np.nan
 
-Next: I’ll stack 2024Q4, 2024Q1, and 2025Q2 data, then begin training.
-"""
-Created on Tuesday 02 April 2024
-@author: Azad Md Abulkalam
-@location: ISB, NTNU
+            # drift_score can be float/None/dict
+            ds = info.get("drift_score", None)
+            try:
+                ds = float(ds)
+            except (TypeError, ValueError):
+                ds = np.nan
 
-To run the proposed models as examples.
+            # name may live in different places across versions
+            stat_name = (
+                info.get("stattest_name")
+                or (info.get("stattest", {}) or {}).get("name")
+                or None
+            )
+
+            dd = info.get("drift_detected", None)
+            if dd is not None:
+                dd = bool(dd)
+
+            rows.append({
+                "column": col,
+                "stattest_name": stat_name,
+                "p_value": p,
+                "drift_score": ds,
+                "drift_detected": dd,
+            })
+
+    df = pd.DataFrame(rows)
+    if df.empty:
+        return df
+
+    # Sort safely; push NaNs to bottom
+    return df.sort_values(["drift_detected", "p_value"],
+                          ascending=[False, True],
+                          na_position="last")
+
 """
 
 from utils.utils_ import paint_vid, add_text_to_frames
@@ -1055,6 +1098,7 @@ def alternative_imread(img_or_path: Union[np.ndarray, str], flag: str = 'color',
 
 def calculate_rmse(image1: np.ndarray, image2: np.ndarray) -> float:
     return np.sqrt(((image1 - image2) ** 2).mean())
+
 
 
 
