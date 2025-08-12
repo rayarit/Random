@@ -1,3 +1,9 @@
+
+As discussed with Abhijat, the next step is to address the class imbalance directly. I’m using SDV to generate additional class-1 rows and then retraining on the augmented set (keeping the test set 100% real). I’ve started this work and will share updated metrics (incl. PR-AUC, precision/recall/F1) once the SDV runs complete.
+
+Attachment: the notebook for the latest tuning/retrain run.
+
+##=======================
 import os
 import copy
 import json
