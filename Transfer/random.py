@@ -1,3 +1,30 @@
+Here’s a cleaner and more concise rewrite with your update included:
+
+---
+
+**Hi John,**
+
+Training with the synthetic data hasn’t completed yet — I’m currently facing a code error during the training steps.
+
+For the same model deployment, here’s the process to follow:
+
+1. **Finalize the model** in the existing notebook, then run cells **52 to 64**. Update the MLflow run ID and adjust the feature schema if any changes were made.
+2. In the Azure repository \[`model_all_scoring_nonconverter_v1`]\(model\_all\_scoring\_nonconverter\_v1 - Repos), fork it, then clone into Databricks.
+3. Navigate to:
+
+   ```
+   src → score → batch → feature_engineering.py
+   ```
+
+   Make any required changes if features have been updated.
+4. In the same batch directory, open `score_spark.ipynb`, update the `score_date` and model version, and execute the entire notebook.
+5. Finally, open `validate_scores.ipynb`, change the `score_date`, and run all cells.
+
+If any issues occur during deployment, refer to the \[Model Deployment Checklist]\(ML Platform - Model Deployment Checklist).
+
+---
+
+Do you want me to also make a **super short 3–4 line version** of this so you can paste it quickly in chat or email?
 
 
 from pyspark.sql.functions import col, when, isnan
@@ -1128,6 +1155,7 @@ def alternative_imread(img_or_path: Union[np.ndarray, str], flag: str = 'color',
 
 def calculate_rmse(image1: np.ndarray, image2: np.ndarray) -> float:
     return np.sqrt(((image1 - image2) ** 2).mean())
+
 
 
 
