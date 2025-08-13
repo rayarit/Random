@@ -1,7 +1,17 @@
+from pyspark.sql.functions import isnan, when, col
 
-As discussed with Abhijat, the next step is to address the class imbalance directly. I’m using SDV to generate additional class-1 rows and then retraining on the augmented set (keeping the test set 100% real). I’ve started this work and will share updated metrics (incl. PR-AUC, precision/recall/F1) once the SDV runs complete.
+# Replace NaNs/nulls in numeric columns
+for c in num_cols:
+    train_df_prep = train_df_prep.withColumn(
+        c, when(isnan(col(c)) | col(c).isNull(), 0).otherwise(col(c))
+    )
 
-Attachment: the notebook for the latest tuning/retrain run.
+# Optional: check if any problem still exists
+for c in num_cols:
+    bad_count = train_df_prep.filter(col(c).isNull() | isnan(col(c))).count()
+    if bad_count > 0:
+        print(f"Warning: {c} still has {bad_count} invalid values")
+
 
 ##=======================
 import os
