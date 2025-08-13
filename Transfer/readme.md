@@ -1,16 +1,12 @@
-from pyspark.sql.functions import isnan, when, col
+from pyspark.sql.functions import when, isnan, col
 
-# Replace NaNs/nulls in numeric columns
-for c in num_cols:
+numeric_cols_final = [f.name for f in train_df_prep.schema.fields if str(f.dataType) != "StringType"]
+
+for c in numeric_cols_final:
     train_df_prep = train_df_prep.withColumn(
         c, when(isnan(col(c)) | col(c).isNull(), 0).otherwise(col(c))
     )
 
-# Optional: check if any problem still exists
-for c in num_cols:
-    bad_count = train_df_prep.filter(col(c).isNull() | isnan(col(c))).count()
-    if bad_count > 0:
-        print(f"Warning: {c} still has {bad_count} invalid values")
 
 
 ##=======================
