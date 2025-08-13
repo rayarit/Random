@@ -1,3 +1,33 @@
+
+
+from pyspark.sql.functions import col, when, isnan
+
+# 1. Get column type lists
+numeric_cols_all = [f.name for f in trainingdf.schema.fields if "StringType" not in str(f.dataType)]
+categorical_cols_all = [f.name for f in trainingdf.schema.fields if "StringType" in str(f.dataType)]
+
+# 2. Clean numeric columns (replace null/NaN with 0)
+for c in numeric_cols_all:
+    trainingdf = trainingdf.withColumn(
+        c, when(isnan(col(c)) | col(c).isNull(), 0).otherwise(col(c))
+    )
+
+# 3. Clean categorical columns (replace null with 'UNK')
+trainingdf = trainingdf.fillna('UNK', subset=categorical_cols_all)
+
+# 4. Final sanity check: print any remaining null/NaN counts
+print("\n=== Final Data Check ===")
+for c in numeric_cols_all:
+    bad_count = trainingdf.filter(col(c).isNull() | isnan(col(c))).count()
+    if bad_count > 0:
+        print(f"⚠ {c} → {bad_count} bad values")
+for c in categorical_cols_all:
+    bad_count = trainingdf.filter(col(c).isNull()).count()
+    if bad_count > 0:
+        print(f"⚠ {c} → {bad_count} nulls")
+print("=== Check Complete ===")
+
+##=======================
 import numpy as np
 import pandas as pd
 from evidently.report import Report
@@ -1098,6 +1128,7 @@ def alternative_imread(img_or_path: Union[np.ndarray, str], flag: str = 'color',
 
 def calculate_rmse(image1: np.ndarray, image2: np.ndarray) -> float:
     return np.sqrt(((image1 - image2) ** 2).mean())
+
 
 
 
