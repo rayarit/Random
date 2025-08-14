@@ -1,30 +1,48 @@
-Here’s a cleaner and more concise rewrite with your update included:
+Notes on CTGAN Failure in Databricks Notebooks
 
----
+Reason for Failure
 
-**Hi John,**
+CTGANSynthesizer wraps a deep learning model (ctgan.CTGAN) that uses PyTorch’s DataLoader with multiprocessing.
 
-Training with the synthetic data hasn’t completed yet — I’m currently facing a code error during the training steps.
+In a Databricks notebook environment, multiprocessing requires pickling the model and data to send them to worker processes.
 
-For the same model deployment, here’s the process to follow:
+CTGAN’s internal state contains PyTorch objects and other elements that cannot be pickled in this environment.
 
-1. **Finalize the model** in the existing notebook, then run cells **52 to 64**. Update the MLflow run ID and adjust the feature schema if any changes were made.
-2. In the Azure repository \[`model_all_scoring_nonconverter_v1`]\(model\_all\_scoring\_nonconverter\_v1 - Repos), fork it, then clone into Databricks.
-3. Navigate to:
+This causes worker crashes and results in:
 
-   ```
-   src → score → batch → feature_engineering.py
-   ```
+concurrent.futures.process.BrokenProcessPool
 
-   Make any required changes if features have been updated.
-4. In the same batch directory, open `score_spark.ipynb`, update the `score_date` and model version, and execute the entire notebook.
-5. Finally, open `validate_scores.ipynb`, change the `score_date`, and run all cells.
 
-If any issues occur during deployment, refer to the \[Model Deployment Checklist]\(ML Platform - Model Deployment Checklist).
+Models like GaussianCopulaSynthesizer work because they run entirely in a single process without spawning multiprocessing workers.
 
----
+What We Tried
 
-Do you want me to also make a **super short 3–4 line version** of this so you can paste it quickly in chat or email?
+Verified that metadata and salesDf are pickleable → both passed.
+
+Upgraded threadpoolctl from 2.2.0 to 3.6.0 to fix known Python 3.10 issues.
+
+Restarted cluster / Python kernel after package upgrade.
+
+Forced PyTorch DataLoader to num_workers=0 (single process) via monkey-patching.
+
+Patched multiprocessing and torch thread settings to force single-thread execution.
+
+Tested both CTGAN and CopulaGAN after these patches → still hit BrokenProcessPool.
+
+Conclusion
+
+In interactive Databricks notebooks, CTGAN’s multiprocessing cannot run reliably.
+
+GaussianCopulaSynthesizer works because it avoids multiprocessing.
+
+CTGAN can still be run:
+
+In a Databricks Job (Python script mode) where multiprocessing works normally.
+
+In a local Python environment and then upload the trained model to Databricks for sampling.
+
+By custom-modifying CTGAN source to remove all multiprocessing calls.
+### =====================================================================
 
 
 from pyspark.sql.functions import col, when, isnan
@@ -1155,6 +1173,7 @@ def alternative_imread(img_or_path: Union[np.ndarray, str], flag: str = 'color',
 
 def calculate_rmse(image1: np.ndarray, image2: np.ndarray) -> float:
     return np.sqrt(((image1 - image2) ** 2).mean())
+
 
 
 
