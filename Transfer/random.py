@@ -1,4 +1,19 @@
 
+Hi John,
+
+I’ve resumed the feature engineering and data preparation work as per our timeline. Since our last discussion (a month ago), I’ve made the following progress:
+
+Derived several features from FCT_CLAIM_HEADER and FCT_MEMBER_MONTH.
+
+Some features could not be derived due to high null values (>80%) in their dependency columns.
+
+Removed Humana members for 2024 (~149K records), leaving us with the final dataset (see attached summary screenshot).
+
+Current Issue / Next Step
+To identify Home Health (HH) members specifically for Q1, we need to merge this dataset with Oracle data. This integration will be the next step in the process.
+
+
+
 ### =====================================================================
 
 
@@ -1130,6 +1145,7 @@ def alternative_imread(img_or_path: Union[np.ndarray, str], flag: str = 'color',
 
 def calculate_rmse(image1: np.ndarray, image2: np.ndarray) -> float:
     return np.sqrt(((image1 - image2) ** 2).mean())
+
 
 
 
