@@ -1,3 +1,43 @@
+
+
+## Update 1 
+# --- NEW robust SQL extraction + gating ---
+raw_text = str(llm_response).strip()
+
+import re
+
+def _extract_sql_from_text(text: str) -> str | None:
+    # 1) fenced code blocks: ```sql ... ``` or ``` ... ```
+    m = re.search(r"```(?:sql)?\s*(.+?)```", text, flags=re.IGNORECASE | re.DOTALL)
+    if m:
+        return m.group(1).strip()
+
+    # 2) first occurrence starting with WITH/SELECT to the end
+    m = re.search(r"(?:^|\n|\r)\s*(WITH|SELECT)\b[\s\S]*", text, flags=re.IGNORECASE)
+    if m:
+        return text[m.start():].strip()
+
+    return None
+
+# special verb we may add later to ask for clarification
+if raw_text.upper().startswith("NEEDS_CLARIFICATION:"):
+    if verbose:
+        print("🛑 LLM requested clarification. Skipping execution.")
+    return False, raw_text, "", None
+
+sql_candidate = _extract_sql_from_text(raw_text)
+
+if not sql_candidate:
+    msg = ("The assistant did not return an executable SQL statement. "
+           "Please ask a specific business question (metric, time window, breakdown).")
+    if verbose:
+        print("🛑 Could not extract SQL from LLM response. Skipping execution.")
+    return False, msg, "", None
+
+# Use the extracted SQL for execution
+llm_response = sql_candidate
+# --- END NEW ---
+
 ##======================= sql_agent.py==================
 
 # --- NEW: Skip execution if the LLM didn't return SQL ---
@@ -106,3 +146,4 @@ def chat():
 
     except Exception as e:
         return jsonify({"response": f"Error: {str(e)}"}), 500
+
