@@ -1,4 +1,18 @@
+Hi John,
 
+Continuing from last week, here’s the Week 2 update on the PCO-HH modeling project:
+
+Completed review of the DIM_DEMOGRAPHIC table and incorporated new demographic features into the dataset.
+
+Derived additional features for enhanced predictive modeling:
+
+Recency_weeks: Captures how recent relevant activities occurred.
+
+stddev_monthly: Measures the monthly variation in activity.
+
+Trend_slope: Quantifies directional trends over time.
+
+All new features have been merged into the base dataset and initial checks for data quality and distributions are underway.
 ### =====================================================================
 
 
@@ -1130,6 +1144,7 @@ def alternative_imread(img_or_path: Union[np.ndarray, str], flag: str = 'color',
 
 def calculate_rmse(image1: np.ndarray, image2: np.ndarray) -> float:
     return np.sqrt(((image1 - image2) ** 2).mean())
+
 
 
 
