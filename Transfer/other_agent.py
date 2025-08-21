@@ -1,4 +1,33 @@
+system_message = (
+        "You are a BigQuery SQL expert. Write a SQL query that answers the user's question "
+        "using ONLY the exact table and column names provided below. "
+        "DO NOT invent columns or tables.\n"
+        "Rules:\n"
+        "- Use fully qualified tables with project+dataset in backticks, e.g., "
+        f"`{self.project_id}.dataset.table_name`.\n"
+        "- Output ONLY the SQL statement. No explanations, no code fences.\n"
+        "- Return RAW numeric values (no K/M/B, %, '$', string concat, or CAST to string).\n"
+        "- Give aggregates a clear alias (e.g., `... AS demand_sales_num`) and ORDER BY that alias.\n"
+        "- Do NOT perform aggregations of aggregations. If needed, aggregate in a CTE/subquery, "
+        "then select from it.\n"
+        "- Keep to valid BigQuery SQL syntax."
+    )
 
+##==================== llm.invoke()
+def _extract_sql_text(self, text: str) -> str:
+    import re
+    if not isinstance(text, str):
+        text = str(text)
+    # remove ```sql ... ``` or ``` ... ```
+    m = re.search(r"```(?:sql)?\s*(.*?)```", text, re.DOTALL | re.IGNORECASE)
+    if m:
+        text = m.group(1)
+    # remove a leading 'sql' token on its own line
+    text = re.sub(r"^\s*sql\s+", "", text, flags=re.IGNORECASE)
+    return text.strip()
+
+
+##=====================================
 
 ## Update 1 
 # --- NEW robust SQL extraction + gating ---
@@ -146,4 +175,5 @@ def chat():
 
     except Exception as e:
         return jsonify({"response": f"Error: {str(e)}"}), 500
+
 
