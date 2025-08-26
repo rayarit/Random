@@ -1,5 +1,23 @@
 
+Filter data to 2024 → we only keep member–month records for the coverage year we care about.
 
+Latest snapshot → for stable member attributes (like demographics, MBR_PID, plan info), we take the record from the latest available month in 2024. This ensures we don’t get duplicate or outdated values.
+
+Year-level rollups:
+
+Indicators (*_IND) → values can change each month (Y/N/NULL). We consolidate to a single year-level flag:
+
+Y if any month is Y
+
+N if no Y but at least one N
+
+NULL if all are NULL
+
+Counts (*_CNT) → summed across the year, with NULL treated as 0 (so missing months don’t drop the totals).
+
+Categorical fields (SNP_TYPE, etc.) → we take the latest non-null value in 2024, since those can change but we need one consistent value.
+
+Final join → combine all features (demographics, indicators, counts, categories) into one row per member for downstream modeling.
 
 ##=============================== Data ROllup with Demograhic data ===========================
 # --- imports
@@ -1240,6 +1258,7 @@ def alternative_imread(img_or_path: Union[np.ndarray, str], flag: str = 'color',
 
 def calculate_rmse(image1: np.ndarray, image2: np.ndarray) -> float:
     return np.sqrt(((image1 - image2) ** 2).mean())
+
 
 
 
