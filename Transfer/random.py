@@ -1,5 +1,115 @@
 
-### =====================================================================
+
+
+##=============================== Data ROllup with Demograhic data ===========================
+# --- imports
+from snowflake.snowpark import Session
+from snowflake.snowpark.window import Window
+from snowflake.snowpark.functions import (
+    col, desc, row_number, upper, lit, coalesce,
+    sum as s_sum, max as s_max, when
+)
+
+# --- source and filter for 2024
+df_star_mm = session.table('PCO_CDM.MARKETING_PROTECTED.STAR_MEMBER_MONTH')
+df_2024 = (
+    df_star_mm
+    .filter(col("MSTR_DEMOGR_ID").is_not_null())
+    .filter((col("COV_MONTH") >= 202401) & (col("COV_MONTH") <= 202412))
+)
+
+# -------------------------
+# 1) LATEST SNAPSHOT (per ID)
+# -------------------------
+latest_w = Window.partition_by('MSTR_DEMOGR_ID').order_by(desc('COV_MONTH'))
+
+# choose the “as-of latest month” columns here
+latest_cols = [
+    "MSTR_DEMOGR_ID",
+    "PAT_BIRTH_DT","PAT_GENDER","PAT_LANGUAGE","PAT_RACE","PAT_ETHNICITY",
+    "PAT_MARITAL_STATUS","PAT_ZIP",
+    "PLAN_MARKET","PLAN_REGION",    # if these should be “latest”
+    "MBR_PID"
+]
+df_latest = (
+    df_2024
+    .with_column("rn", row_number().over(latest_w))
+    .filter(col("rn") == 1)
+    .drop("rn")
+    .select([col(c) for c in latest_cols])
+)
+
+# ------------------------------------
+# 2) YEAR ROLL-UPS FOR INDICATOR FIELDS
+# ------------------------------------
+# Indicators with Y/N/NULL at month level
+indicator_cols = [
+    "DUAL_ELIG","LIS_IND","FRAILTY_IND","SNP_IND","HOSPICE_IND",
+    "ESRD_IND","INSTITUTIONAL_IND","NHC_IND","ENGAGED_PAT_IND","PANELIZED"
+]
+
+# Map Y->2, N->1, NULL/other->0, then max() over year.
+# After aggregation: 2 => 'Y'; 1 => 'N'; 0 => NULL
+agg_exprs_ind = []
+for c in indicator_cols:
+    encoded = when(upper(col(c)) == lit('Y'), lit(2)) \
+              .when(upper(col(c)) == lit('N'), lit(1)) \
+              .otherwise(lit(0))
+    agg_exprs_ind.append(s_max(encoded).alias(f"{c}__YN_RANK"))
+
+df_ind_rollup = df_2024.group_by("MSTR_DEMOGR_ID").agg(*agg_exprs_ind)
+
+# decode back to Y/N/NULL and drop helper cols
+for c in indicator_cols:
+    rank_col = f"{c}__YN_RANK"
+    df_ind_rollup = df_ind_rollup.with_column(
+        c,
+        when(col(rank_col) == lit(2), lit('Y'))
+        .when(col(rank_col) == lit(1), lit('N'))
+        .otherwise(lit(None))
+    ).drop(rank_col)
+
+# --------------------------------
+# 3) YEAR ROLL-UPS FOR COUNT FIELDS
+# --------------------------------
+# Sums (NULL treated as 0). Use your actual *_CNT list here.
+count_cols = ["ENGAGED_PAT_CNT","PANELIZED_CNT"]
+
+agg_exprs_cnt = [s_sum(coalesce(col(c), lit(0))).alias(c) for c in count_cols]
+df_cnt_rollup = df_2024.group_by("MSTR_DEMOGR_ID").agg(*agg_exprs_cnt)
+
+# --------------------------------
+# 4) OPTIONAL: LATEST NON-NULL FOR TYPE-LIKE FIELDS
+# --------------------------------
+# Example for SNP_TYPE (categorical that can vary monthly): take latest NON-NULL in 2024
+df_type_latest = (
+    df_2024
+    .filter(col("SNP_TYPE").is_not_null())
+    .with_column("rn", row_number().over(latest_w))
+    .filter(col("rn") == 1)
+    .select(col("MSTR_DEMOGR_ID"), col("SNP_TYPE"))
+)
+
+# -------------------------
+# 5) FINAL JOIN
+# -------------------------
+df_year_features = (
+    df_latest
+    .join(df_ind_rollup, on="MSTR_DEMOGR_ID", how="left")
+    .join(df_cnt_rollup, on="MSTR_DEMOGR_ID", how="left")
+    .join(df_type_latest, on="MSTR_DEMOGR_ID", how="left")   # optional
+)
+
+# Join to your cohort (filtered_common_id_df) and materialize/inspect
+com_with_df_star = filtered_common_id_df.join(df_year_features, on="MSTR_DEMOGR_ID", how="inner")
+
+# Sanity checks
+print("year-level rows:", com_with_df_star.count())
+print("final column count:", len(com_with_df_star.columns))
+
+
+
+### ==========================================================================================================
 
 
 from pyspark.sql.functions import col, when, isnan
@@ -1130,6 +1240,7 @@ def alternative_imread(img_or_path: Union[np.ndarray, str], flag: str = 'color',
 
 def calculate_rmse(image1: np.ndarray, image2: np.ndarray) -> float:
     return np.sqrt(((image1 - image2) ** 2).mean())
+
 
 
 
