@@ -1,23 +1,41 @@
+Day 1 – Data Audit + Smart Univariate Analysis
+	• Data Audit
+		○ Data types, missingness heatmap, missingness dependency (Missingno, Little’s MCAR test).
+		○ Outlier detection with Tukey’s IQR & z-scores.
+		○ Target balance check (HH vs non-HH).
+	• Smart Univariate Analysis
+		○ For continuous vars: Distribution + normality check (Shapiro/K-S test).
+		○ For categorical vars: Entropy/Information Value (IV) against target.
+		○ Outlier impact: Winsorization vs log-transform candidates flagged.
+	• Deliverable: Missingness/Outlier treatment strategy, Top 10 strongest features by univariate predictive power (IV, correlation with target).
 
-Filter data to 2024 → we only keep member–month records for the coverage year we care about.
+Day 2 – Feature-Target Relationship Deep Dive
+	• Categorical vs Target
+		○ Chi-square with Cramer’s V effect size.
+		○ Weight of Evidence (WoE) transformation for high-cardinality features.
+	• Continuous vs Target
+		○ KS statistic / AUC measure per feature.
+		○ Bin continuous features (quantiles) → compare target rate trends.
+		○ Partial dependency (1-D plots).
+	• Deliverable: Ranked list of features most associated with HH adoption, with plots showing monotonic/non-monotonic trends.
 
-Latest snapshot → for stable member attributes (like demographics, MBR_PID, plan info), we take the record from the latest available month in 2024. This ensures we don’t get duplicate or outdated values.
+Day 3 – Multivariate Insights & Interaction Effects
+	• Correlation & Multicollinearity
+		○ Pearson/Spearman matrix → Variance Inflation Factor (VIF).
+		○ Remove redundant features (>0.8 correlation).
+	• Interactions
+		○ Chi-square automatic interaction detection (CHAID) or decision tree splits on target.
+		○ 2-way interaction heatmaps (e.g., chronic condition × visit frequency).
+	• Deliverable: List of interaction candidates + reduced feature set with redundancy handled.
 
-Year-level rollups:
-
-Indicators (*_IND) → values can change each month (Y/N/NULL). We consolidate to a single year-level flag:
-
-Y if any month is Y
-
-N if no Y but at least one N
-
-NULL if all are NULL
-
-Counts (*_CNT) → summed across the year, with NULL treated as 0 (so missing months don’t drop the totals).
-
-Categorical fields (SNP_TYPE, etc.) → we take the latest non-null value in 2024, since those can change but we need one consistent value.
-
-Final join → combine all features (demographics, indicators, counts, categories) into one row per member for downstream modeling.
+Day 4 – Advanced Explorations (Propensity Focused)
+	• Clustering / Segmentation
+		○ Use PCA/UMAP + k-means/HDBSCAN to see if natural groups align with HH takers.
+		○ Compare HH rate across clusters.
+	• Propensity Features Diagnostics
+		○ Stability check (PSI – Population Stability Index) between HH=1 and HH=0 groups.
+		○ Feature drift: Are some features significantly different distributions between groups?
+Deliverable: Segment insights (e.g., “Cluster 3 = older, frequent PCO visitors, 3x more likely to take HH”).
 
 ##=============================== Data ROllup with Demograhic data ===========================
 # --- imports
@@ -1258,6 +1276,7 @@ def alternative_imread(img_or_path: Union[np.ndarray, str], flag: str = 'color',
 
 def calculate_rmse(image1: np.ndarray, image2: np.ndarray) -> float:
     return np.sqrt(((image1 - image2) ** 2).mean())
+
 
 
 
