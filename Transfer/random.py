@@ -1,3 +1,34 @@
+Key EDA Insights:
+
+High-utilization features (ER visits, admissions, total encounters) show extreme outliers, but these are strong risk signals rather than noise. Will treat via log/quantile transforms instead of winsorizing.
+
+Stable features (panelized counts, engagement metrics) are balanced and can act as baselines to prevent overfitting.
+
+Binary risk flags (readmit, dialysis, Part B) are highly imbalanced but important differentiators—need to retain and monitor.
+
+KS distance checks highlighted a few features (READMIT_FLAG, PARTB_FLAG) that may drive model drift → flagged for monitoring post-deployment.
+
+IV/WOE results:
+
+AGE_GROUP (IV ≈ 0.58) → very strong predictor (needs stability/fairness check).
+
+PLAN_MARKET (IV ≈ 0.27) → moderate/strong predictor.
+
+PLAN_REGION (IV ≈ 0.05) → weak but possibly useful in combinations.
+
+GENDER (IV ≈ 0.006) → negligible, likely drop.
+
+Next steps (this week):
+
+Finalize feature transformations (log/binning/ratios).
+
+Consolidate categorical risk flags into comorbidity/risk indices.
+
+Prepare feature set for initial model experimentation.
+
+Let me know if you’d like me to prepare a short walkthrough deck once I finish the EDA cycle this week.
+
+##====================
 Day 1 – Data Audit + Smart Univariate Analysis
 	• Data Audit
 		○ Data types, missingness heatmap, missingness dependency (Missingno, Little’s MCAR test).
@@ -1276,6 +1307,7 @@ def alternative_imread(img_or_path: Union[np.ndarray, str], flag: str = 'color',
 
 def calculate_rmse(image1: np.ndarray, image2: np.ndarray) -> float:
     return np.sqrt(((image1 - image2) ** 2).mean())
+
 
 
 
