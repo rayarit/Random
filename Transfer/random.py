@@ -1,59 +1,37 @@
 import numpy as np
 import pandas as pd
 
-# -------------------------------------------------------------------
-# CONFIG
-# -------------------------------------------------------------------
-target_col   = "HH_FLAG"   # <-- your binary target (1 = HH, 0 = non-HH)
-pos_label    = 1
-rare_min_prop = 0.01       # collapse levels occurring in <1% of rows
-eps           = 1e-6       # numeric guard for zero counts
-create_woe_for_topN = 10   # set 0 to skip creating _WOE features
+# df_local: a pandas DataFrame you exported from Snowflake (CSV/Parquet/etc.)
+target_col    = "HH_FLAG"   # binary target
+pos_label     = 1
+rare_min_prop = 0.01
+eps           = 1e-6
 
-# -------------------------------------------------------------------
-# IV / WOE (vectorized, robust)
-#   - treats missing as its own level
-#   - collapses rare levels into "__OTHER__"
-#   - positive WoE => event-heavy bin
-# -------------------------------------------------------------------
-def calc_iv_woe_fast(df, feature, target, pos_label=1, rare_min_prop=0.01, eps=1e-6):
+def calc_iv_woe_pandas(df, feature, target, pos_label=1, rare_min_prop=0.01, eps=1e-6):
     s = df[feature].astype("object").fillna("__MISSING__")
     y = (df[target] == pos_label).astype(int)
-
-    # if the sample has only one class, IV is 0 by definition
     if y.sum() == 0 or y.sum() == len(y):
-        empty = pd.DataFrame(columns=[
-            "level","n","events","nonevents","dist_bad","dist_good","woe","iv_contrib"
-        ])
-        return 0.0, empty, {}
+        return 0.0, pd.DataFrame(columns=["level","n","events","nonevents","dist_bad","dist_good","woe","iv_contrib"]), {}
 
-    # cross-tab counts
     ct = pd.crosstab(s, y)
-    if 0 not in ct.columns:
-        ct[0] = 0
-    if 1 not in ct.columns:
-        ct[1] = 0
-    ct = ct[[0, 1]]  # order: nonevents, events
+    if 0 not in ct.columns: ct[0] = 0
+    if 1 not in ct.columns: ct[1] = 0
+    ct = ct[[0,1]]
 
     n = ct.sum(axis=1)
-    # collapse rare levels
-    prop = n / n.sum()
-    rare_mask = prop < rare_min_prop
-    if rare_mask.any():
-        ct.loc["__OTHER__"] = ct.loc[rare_mask].sum()
-        ct = ct.loc[~rare_mask | (ct.index == "__OTHER__")]
+    rare = n / n.sum() < rare_min_prop
+    if rare.any():
+        other = ct.loc[rare].sum()
+        ct = ct.loc[~rare].copy()
+        ct.loc["__OTHER__"] = other
 
-    nonevents = ct[0]
-    events    = ct[1]
+    nonevents, events = ct[0], ct[1]
+    dist_good = (nonevents + eps) / (nonevents.sum() + eps)  # non-events
+    dist_bad  = (events    + eps) / (events.sum()    + eps)  # events
 
-    # distributions
-    dist_good = (nonevents + eps) / (nonevents.sum() + eps)  # "good" = non-events
-    dist_bad  = (events    + eps) / (events.sum()    + eps)  # "bad"  = events
-
-    # WoE with positive values meaning "event-heavy"
     woe = np.log(dist_bad / dist_good)
     iv_contrib = (dist_bad - dist_good) * woe
-    total_iv = float(iv_contrib.sum())
+    iv_total = float(iv_contrib.sum())
 
     woe_df = pd.DataFrame({
         "level": ct.index,
@@ -66,61 +44,36 @@ def calc_iv_woe_fast(df, feature, target, pos_label=1, rare_min_prop=0.01, eps=1
         "iv_contrib": iv_contrib.values
     }).sort_values("iv_contrib", ascending=False).reset_index(drop=True)
 
-    # mapping dict to apply WoE later
-    woe_map = dict(zip(woe_df["level"], woe_df["woe"]))
-    return total_iv, woe_df, woe_map
+    return iv_total, woe_df, dict(zip(woe_df["level"], woe_df["woe"]))
 
-
-# -------------------------------------------------------------------
-# Choose categorical columns (exclude DOB + target)
-# -------------------------------------------------------------------
+# --- run for many categoricals ---
 exclude = {"PAT_BIRTH_DT", target_col}
-categorical_cols = [
-    c for c in df_clean.columns
-    if (c not in exclude) and (
-        pd.api.types.is_object_dtype(df_clean[c]) or
-        pd.api.types.is_categorical_dtype(df_clean[c]) or
-        pd.api.types.is_string_dtype(df_clean[c])
-    )
-]
+categorical_cols = (
+    df_local
+      .select_dtypes(include=["object","category"])
+      .columns.difference(exclude)
+      .tolist()
+)
 
-# -------------------------------------------------------------------
-# Compute IV for each categorical feature
-# -------------------------------------------------------------------
-iv_rows = []
-woe_maps = {}      # store mappings so we can transform later if needed
-woe_tables = {}    # store detailed tables (optional)
-
+rows, wmaps = [], {}
 for c in categorical_cols:
-    iv, woe_tbl, wmap = calc_iv_woe_fast(
-        df_clean, c, target_col,
-        pos_label=pos_label,
-        rare_min_prop=rare_min_prop,
-        eps=eps
-    )
-    iv_rows.append({"Feature": c, "IV": iv})
-    woe_maps[c] = wmap
-    woe_tables[c] = woe_tbl
+    iv, wtbl, wmap = calc_iv_woe_pandas(df_local, c, target_col, pos_label, rare_min_prop, eps)
+    rows.append({"Feature": c, "IV": iv})
+    wmaps[c] = wmap
 
-iv_df = pd.DataFrame(iv_rows).sort_values("IV", ascending=False).reset_index(drop=True)
+iv_df = pd.DataFrame(rows).sort_values("IV", ascending=False).reset_index(drop=True)
+print(iv_df.head(10))
 
-# Top-10 features by IV
-top_10_iv = iv_df.head(10)
-print(top_10_iv)
+# optional: create _WOE columns for top K
+K = 10
+df_local_woe = df_local.copy()
+for c in iv_df.head(K)["Feature"]:
+    m = wmaps[c]
+    s = df_local_woe[c].astype("object").fillna("__MISSING__")
+    if "__OTHER__" in m:
+        s = s.where(s.isin(m.keys()), "__OTHER__")
+    df_local_woe[c + "_WOE"] = s.map(m)
 
-# -------------------------------------------------------------------
-# (Optional) Create _WOE columns for top-N categorical features
-# -------------------------------------------------------------------
-if create_woe_for_topN > 0:
-    df_woe = df_clean.copy()
-    for c in top_10_iv["Feature"].tolist()[:create_woe_for_topN]:
-        m = woe_maps[c]
-        s = df_woe[c].astype("object").fillna("__MISSING__")
-        # route unseen/rare levels to "__OTHER__" if mapping has it, else leave as is
-        if "__OTHER__" in m:
-            s = s.where(s.isin(m.keys()), "__OTHER__")
-        df_woe[c + "_WOE"] = s.map(m)
-    # df_woe now contains WOE-transformed numeric columns for the top features
 
 
 ##====================
@@ -1402,6 +1355,7 @@ def alternative_imread(img_or_path: Union[np.ndarray, str], flag: str = 'color',
 
 def calculate_rmse(image1: np.ndarray, image2: np.ndarray) -> float:
     return np.sqrt(((image1 - image2) ** 2).mean())
+
 
 
 
