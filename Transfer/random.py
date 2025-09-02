@@ -1,5 +1,84 @@
 import numpy as np
 import pandas as pd
+from scipy.stats import ks_2samp
+import matplotlib.pyplot as plt
+
+def ks_test_imputation(df, impute_rules, threshold=0.1, plot=False):
+    """
+    Run KS tests before vs after imputation for numeric features.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Original dataframe with nulls.
+    impute_rules : dict
+        Dictionary of {col: strategy} where strategy ∈ {"zero", "median", "mean"}.
+    threshold : float
+        KS threshold above which drift is flagged.
+    plot : bool
+        If True, plots before vs after distributions for flagged cols.
+
+    Returns
+    -------
+    ks_results : pd.DataFrame
+        Summary table with KS statistics and drift flags.
+    df_imputed : pd.DataFrame
+        Dataframe with imputed values.
+    """
+
+    df_imputed = df.copy()
+    results = []
+
+    for col, strategy in impute_rules.items():
+        if col not in df.columns:
+            continue
+
+        series_before = df[col].dropna()
+
+        # ---- Edge cases ----
+        if series_before.empty:  # all NaN
+            df_imputed[col] = 0
+            results.append((col, np.nan, "ALL_NAN"))
+            continue
+        if df[col].nunique(dropna=True) == 1:  # constant col
+            df_imputed[col].fillna(df[col].mode()[0], inplace=True)
+            results.append((col, 0.0, "CONSTANT"))
+            continue
+
+        # ---- Imputation ----
+        if strategy == "zero":
+            fill_val = 0
+        elif strategy == "median":
+            fill_val = df[col].median()
+        elif strategy == "mean":
+            fill_val = df[col].mean()
+        else:
+            raise ValueError(f"Unknown strategy {strategy} for {col}")
+
+        df_imputed[col].fillna(fill_val, inplace=True)
+
+        # ---- KS test ----
+        series_after = df_imputed[col]
+        ks_stat, p_val = ks_2samp(series_before, series_after)
+
+        results.append((col, ks_stat, "DRIFT" if ks_stat > threshold else "OK"))
+
+        # ---- Optional plot ----
+        if plot and ks_stat > threshold:
+            plt.figure(figsize=(6,4))
+            series_before.hist(alpha=0.5, bins=30, label="Before")
+            series_after.hist(alpha=0.5, bins=30, label="After")
+            plt.title(f"{col}: KS={ks_stat:.3f}")
+            plt.legend()
+            plt.show()
+
+    ks_results = pd.DataFrame(results, columns=["column", "ks_stat", "status"])
+    return ks_results, df_imputed
+
+
+##===============
+import numpy as np
+import pandas as pd
 
 # df_local: a pandas DataFrame you exported from Snowflake (CSV/Parquet/etc.)
 target_col    = "HH_FLAG"   # binary target
@@ -1355,6 +1434,7 @@ def alternative_imread(img_or_path: Union[np.ndarray, str], flag: str = 'color',
 
 def calculate_rmse(image1: np.ndarray, image2: np.ndarray) -> float:
     return np.sqrt(((image1 - image2) ** 2).mean())
+
 
 
 
