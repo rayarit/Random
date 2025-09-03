@@ -1,4 +1,162 @@
 import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import missingno as msno
+from scipy.stats import shapiro, ks_2samp, zscore
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+
+# Load cleaned dataset
+df = pd.read_csv(r"C:\Users\AYR2733\vscode\PCO\proj2\data\PCO_HH_V1_0826.csv")
+
+# -----------------------
+# 1. Data Audit
+# -----------------------
+print("Shape:", df.shape)
+print(df.info())
+print(df.describe(include="all").T)
+
+# Missingness heatmap
+msno.heatmap(df)
+plt.show()
+
+# Outlier detection: Tukey’s IQR
+def detect_outliers_iqr(series):
+    q1, q3 = np.percentile(series.dropna(), [25, 75])
+    iqr = q3 - q1
+    lower, upper = q1 - 1.5 * iqr, q3 + 1.5 * iqr
+    return ((series < lower) | (series > upper)).sum()
+
+outlier_summary = {col: detect_outliers_iqr(df[col]) for col in df.select_dtypes(include=np.number).columns}
+
+# Target balance check
+print(df['HH_FLAG'].value_counts(normalize=True))  # assuming HH_FLAG = target
+
+# -----------------------
+# 2. Smart Univariate Analysis
+# -----------------------
+from sklearn.metrics import roc_auc_score
+
+# Continuous vars: distribution + normality
+num_cols = df.select_dtypes(include=np.number).drop(columns=['HH_FLAG']).columns
+for col in num_cols:
+    sns.histplot(df[col].dropna(), kde=True)
+    plt.title(f"{col} distribution")
+    plt.show()
+    if df[col].nunique() > 10:
+        stat, p = shapiro(df[col].dropna().sample(min(5000, df[col].notna().sum())))
+        print(f"{col} Shapiro-Wilk p={p:.4f} {'Normal' if p>0.05 else 'Non-normal'}")
+
+# Categorical vars: Information Value (IV)
+def calc_iv(df, feature, target):
+    temp = df.groupby(feature)[target].agg(['count','sum'])
+    temp['non_event'] = temp['count'] - temp['sum']
+    event_rate = temp['sum'].sum()/temp['count'].sum()
+    non_event_rate = 1 - event_rate
+    temp['event_dist'] = temp['sum']/temp['sum'].sum()
+    temp['non_event_dist'] = temp['non_event']/temp['non_event'].sum()
+    temp['woe'] = np.log((temp['event_dist']+1e-5)/(temp['non_event_dist']+1e-5))
+    iv = ((temp['event_dist']-temp['non_event_dist'])*temp['woe']).sum()
+    return iv
+
+iv_scores = {col: calc_iv(df, col, 'HH_FLAG') for col in df.select_dtypes(include='object').columns}
+print("Top IV features:", sorted(iv_scores.items(), key=lambda x: x[1], reverse=True)[:10])
+
+
+## Feature–Target Relationship Deep Dive
+from scipy.stats import chi2_contingency
+import prince  # for WoE if needed
+
+# Categorical vs Target: Chi-square + Cramer’s V
+def cramers_v(confusion_matrix):
+    chi2 = chi2_contingency(confusion_matrix)[0]
+    n = confusion_matrix.sum().sum()
+    phi2 = chi2/n
+    r,k = confusion_matrix.shape
+    return np.sqrt(phi2/min(k-1,r-1))
+
+cat_cols = df.select_dtypes(include='object').columns
+for col in cat_cols:
+    cm = pd.crosstab(df[col], df['HH_FLAG'])
+    print(col, "Cramer's V:", cramers_v(cm))
+
+# Continuous vs Target: KS & AUC
+for col in num_cols:
+    ks, _ = ks_2samp(df.loc[df['HH_FLAG']==1, col].dropna(),
+                     df.loc[df['HH_FLAG']==0, col].dropna())
+    auc = roc_auc_score(df['HH_FLAG'], df[col].fillna(df[col].median()))
+    print(f"{col}: KS={ks:.3f}, AUC={auc:.3f}")
+
+# Binning continuous vars
+for col in num_cols:
+    df[f"{col}_bin"] = pd.qcut(df[col], q=5, duplicates="drop")
+    sns.barplot(x=df[f"{col}_bin"], y=df['HH_FLAG'])
+    plt.title(f"{col} vs Target Rate")
+    plt.xticks(rotation=45)
+    plt.show()
+
+
+## Multivariate Insights & Interaction Effects
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+
+# Correlation + VIF
+corr = df[num_cols].corr(method='spearman')
+sns.heatmap(corr, cmap="coolwarm", center=0)
+plt.show()
+
+vif_data = pd.DataFrame()
+vif_data["feature"] = num_cols
+vif_data["VIF"] = [variance_inflation_factor(df[num_cols].fillna(0).values, i)
+                   for i in range(len(num_cols))]
+print(vif_data.sort_values("VIF", ascending=False))
+
+# Interaction effects
+for col1 in ['READMIT_FLAG','DIALYSIS_FLAG']:
+    for col2 in ['ER_VISIT_COUNT','TOTAL_ENCOUNTERS']:
+        cm = pd.crosstab(df[col1], pd.qcut(df[col2], q=5, duplicates="drop"), df['HH_FLAG'], aggfunc='mean').fillna(0)
+        sns.heatmap(cm, annot=True, cmap="Blues")
+        plt.title(f"{col1} × {col2} vs HH rate")
+        plt.show()
+## Advanced Explorations (Propensity Focused)
+from sklearn.decomposition import PCA
+from sklearn.cluster import KMeans
+from scipy.spatial.distance import cdist
+
+# PCA + clustering
+X = df[num_cols].fillna(0)
+X_pca = PCA(n_components=2).fit_transform(X)
+
+kmeans = KMeans(n_clusters=4, random_state=42).fit(X_pca)
+df['cluster'] = kmeans.labels_
+
+sns.scatterplot(x=X_pca[:,0], y=X_pca[:,1], hue=df['cluster'], palette='tab10')
+plt.show()
+
+# Compare HH rate across clusters
+print(df.groupby('cluster')['HH_FLAG'].mean())
+
+# PSI: Population Stability Index between HH=1 and HH=0
+def calc_psi(expected, actual, buckets=10):
+    def scale_range(input, buckets):
+        return np.linspace(input.min(), input.max(), buckets)
+    psi = 0
+    breakpoints = scale_range(expected, buckets)
+    expected_counts = np.histogram(expected, breakpoints)[0] / len(expected)
+    actual_counts = np.histogram(actual, breakpoints)[0] / len(actual)
+    for e,a in zip(expected_counts, actual_counts):
+        if e>0 and a>0:
+            psi += (e-a)*np.log(e/a)
+    return psi
+
+psi_results = {}
+for col in num_cols:
+    psi_results[col] = calc_psi(df.loc[df['HH_FLAG']==0, col].fillna(0),
+                                df.loc[df['HH_FLAG']==1, col].fillna(0))
+print("Top drift features:", sorted(psi_results.items(), key=lambda x: -x[1])[:10])
+
+
+##=====================_______________________++++++++++++++++++++++++++++++++++++++++
+import pandas as pd
 
 def handle_categorical_features(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -1478,6 +1636,7 @@ def alternative_imread(img_or_path: Union[np.ndarray, str], flag: str = 'color',
 
 def calculate_rmse(image1: np.ndarray, image2: np.ndarray) -> float:
     return np.sqrt(((image1 - image2) ** 2).mean())
+
 
 
 
