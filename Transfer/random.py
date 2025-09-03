@@ -1,3 +1,47 @@
+import pandas as pd
+
+def handle_categorical_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Clean categorical features with domain-driven imputation.
+    """
+
+    # 1. Drop FRAILTY_IND (too imbalanced: 1 'Y')
+    if "FRAILTY_IND" in df.columns:
+        df = df.drop(columns=["FRAILTY_IND"])
+        print("Dropped FRAILTY_IND due to extreme imbalance (only 1 'Y').")
+
+    # 2. Handle program eligibility flags
+    flag_cols = ["LIS_IND", "DUAL_ELIG"]
+    for col in flag_cols:
+        if col in df.columns:
+            df[col] = df[col].fillna("Unknown")
+            # optional: enforce consistent categories
+            df[col] = df[col].replace({"Y": "Yes", "N": "No"})
+    
+    # 3. Handle ethnicity & marital status
+    cat_fill_unknown = ["PAT_ETHNICITY_STD", "PAT_MARITAL_STATUS_STD"]
+    for col in cat_fill_unknown:
+        if col in df.columns:
+            df[col] = df[col].fillna("Unknown")
+
+    # 4. Safety check: replace any leftover NaN in object/category cols with "Unknown"
+    for col in df.select_dtypes(include=["object", "category"]).columns:
+        if df[col].isna().sum() > 0:
+            df[col] = df[col].fillna("Unknown")
+
+    return df
+Categorical Null Handling – First Version
+This is our first version of handling categorical nulls.
+We replace missing values with "Unknown" and, where useful, add a _MISSING flag.
+In healthcare data, missing ≠ random → it often reflects not reported, not applicable, or access gaps.
+By treating missing as "Unknown", we:
+Keep all members (no row loss).
+Let the model learn from "Unknown" as a real category.
+Preserve signal via _MISSING flags (reporting patterns may predict HH propensity).
+
+✅ Takeaway: For now we use the simple, interpretable "Unknown" strategy.
+Later versions may test advanced imputations (e.g., predictive models or rule-based filling) if they improve recall/precision.
+##+===================================================
 import numpy as np
 import pandas as pd
 from scipy.stats import ks_2samp
@@ -1434,6 +1478,7 @@ def alternative_imread(img_or_path: Union[np.ndarray, str], flag: str = 'color',
 
 def calculate_rmse(image1: np.ndarray, image2: np.ndarray) -> float:
     return np.sqrt(((image1 - image2) ** 2).mean())
+
 
 
 
