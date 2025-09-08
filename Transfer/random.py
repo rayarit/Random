@@ -1,4 +1,29 @@
-import pandas as pd
+
+
+Hi [Onsite Team / Name],
+
+Quick update from my side:
+
+I’ve built the baseline model using classical ML algorithms.
+
+Initial Random Forest: ~58% recall on the positive class
+
+Current best (XGBoost):
+
+Metric	Class 0	Class 1
+Precision	99.4%	7.0%
+Recall	83.5%	~68%
+F1 Score	90.9%	12.5%
+
+Further improvements are expected with threshold tuning and feature refinement.
+
+Also started on NC model deployment:
+
+Cloned the repo, modified the code, and tested score_spark locally.
+
+Planning to raise a PR by tomorrow, assuming no unexpected blockers
+
+##===========================import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -1636,6 +1661,7 @@ def alternative_imread(img_or_path: Union[np.ndarray, str], flag: str = 'color',
 
 def calculate_rmse(image1: np.ndarray, image2: np.ndarray) -> float:
     return np.sqrt(((image1 - image2) ** 2).mean())
+
 
 
 
