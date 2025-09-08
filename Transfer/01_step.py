@@ -105,3 +105,113 @@ plt.xticks(rotation=45)
 plt.grid(axis="y", linestyle="--", alpha=0.7)
 plt.show()
 
+
+## step 5 : 
+##==============================
+## Best model & Threshold tuning 
+##==============================
+#TBA
+
+
+## Step 6 
+##===================================================================
+## Decile Analysis 1: Highest - 10 : Lowest , Conversion rate & List 
+##==================================================================
+# Recreate df_preds if not already available
+proba = best_model.predict_proba(Xte_sel)[:, 1]
+df_preds = pd.DataFrame({
+    "TrueLabel": y_test,
+    "Proba": proba
+})
+
+# Create decile bins (1 = highest risk, 10 = lowest risk)
+df_preds['Decile'] = pd.qcut(
+    df_preds['Proba'].rank(method='first', ascending=False),
+    10, labels=False
+) + 1  # now 1 = top 10% highest scores
+
+# Group by decile and calculate metrics
+decile_summary = df_preds.groupby('Decile').agg(
+    Count=('TrueLabel', 'count'),
+    Conversions=('TrueLabel', 'sum'),
+    Avg_Probability=('Proba', 'mean')
+).reset_index()
+
+# Calculate conversion rate
+decile_summary['ConversionRate'] = (
+    decile_summary['Conversions'] / decile_summary['Count']
+)
+
+# Calculate lift
+overall_rate = df_preds['TrueLabel'].mean()
+decile_summary['Lift'] = decile_summary['ConversionRate'] / overall_rate
+
+# Sort so Decile 1 = top risk comes first
+decile_summary = decile_summary.sort_values(by='Decile', ascending=True)
+
+# Display
+print("=== Decile Analysis Summary (Decile 1 = Highest Risk) ===")
+print(decile_summary)
+
+
+## Step 7 
+##=======================================
+## Gain Chart / Cumulative Recall Curve 
+##======================================
+
+'''
+How much of the positive class (HH referrals) you capture as you move down the ranked deciles.
+'''
+
+import matplotlib.pyplot as plt
+
+# --- Decile Summary with Cumulative Metrics ---
+def decile_gain_chart(y_true, y_proba, n_deciles=10):
+    df = pd.DataFrame({"TrueLabel": y_true, "Proba": y_proba})
+
+    # Rank probabilities (highest = top risk)
+    df = df.sort_values("Proba", ascending=False).reset_index(drop=True)
+    df["Decile"] = pd.qcut(df.index, q=n_deciles, labels=False) + 1
+
+    # Group by decile
+    decile_summary = df.groupby("Decile").agg(
+        Count=("TrueLabel", "count"),
+        Conversions=("TrueLabel", "sum"),
+        Avg_Probability=("Proba", "mean")
+    ).reset_index()
+
+    # Conversion rate
+    decile_summary["ConversionRate"] = (
+        decile_summary["Conversions"] / decile_summary["Count"]
+    )
+
+    # Cumulative HH (recall curve)
+    decile_summary["Cum_Conversions"] = decile_summary["Conversions"].cumsum()
+    decile_summary["Cum_Recall"] = (
+        decile_summary["Cum_Conversions"] / decile_summary["Conversions"].sum()
+    )
+
+    # Lift
+    overall_rate = df["TrueLabel"].mean()
+    decile_summary["Lift"] = decile_summary["ConversionRate"] / overall_rate
+
+    return decile_summary
+
+# --- Run for your model ---
+decile_summary = decile_gain_chart(y_test, proba, n_deciles=10)
+print(decile_summary)
+
+# --- Gain Chart (Cumulative Recall) ---
+plt.figure(figsize=(8,5))
+plt.plot(decile_summary["Decile"], decile_summary["Cum_Recall"],
+         marker="o", label="Cumulative Recall")
+plt.plot([1,10],[0,1], "--", color="gray", label="Random Model")  # baseline
+plt.xlabel("Decile (1 = Highest Risk)")
+plt.ylabel("Cumulative Recall (HH captured)")
+plt.title("Gain Chart – HH Propensity Model")
+plt.legend()
+plt.grid(True)
+plt.show()
+
+
+
