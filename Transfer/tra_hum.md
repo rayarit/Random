@@ -1,4 +1,41 @@
+2.2 Repository Structure & Configuration
 
+The MLPModelTemplate contains production-ready folders for training, scoring, configuration, and deployment. Only specific sections are editable by data scientists (e.g., src/train, src/score).
+It is important that any additions or changes still follow the deployment template format, as this format is mandatory for production and testing.
+You may also create a new Databricks cluster, but it must follow the approved environment standards.
+
+2.3 Data Exploration, Feature Building & Training
+
+Exploratory data analysis and feature engineering should be performed within Databricks using approved data sources.
+The template repo provides training templates that can be reused or adapted instead of writing ad-hoc notebooks.
+This helps maintain consistency and makes the model easier to integrate into the deployment pipeline.
+
+2.4 ADLS Directory Structure (Production Alignment)
+
+As datasets and artifacts are generated, the model’s directory in Azure Data Lake Storage (ADLS) must follow the Model ADLS Structure standards.
+All intermediate and processed data should be stored in the correct folders to support traceability, reproducibility, and production handoff.
+Development must use production-compliant Databricks runtimes to avoid compatibility issues during deployment.
+
+2.5 Naming Conventions (Mandatory)
+
+Consistent naming is required across:
+
+Repos
+
+ADLS folders
+
+Notebooks and pipelines
+
+MLflow model objects
+
+Standard names enable automation, easier collaboration, and seamless deployment into FlorenceAI.
+
+2.6 Model Registration and Tracking
+
+All models must be registered in MLflow, including versioning, metadata, and artifacts.
+Model objects should be tracked and managed according to the Handling Model Objects guidelines to support reuse, promotion to higher environments, and collaboration with AI Engineering.
+
+##=========
 %%spark
 import org.apache.spark.sql.functions._
 
