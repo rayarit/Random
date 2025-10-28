@@ -1,3 +1,153 @@
+from pyspark.sql import functions as F
+from pyspark.sql import Window
+from pyspark.ml.functions import vector_to_array
+from pyspark.mllib.evaluation import MulticlassMetrics
+import mlflow, json, os
+from datetime import datetime
+
+# ==== EDIT THESE 3 ONLY ====
+run_name            = "all-scoring-nonconverter-v1"   # folder under models/
+container_base      = f"abfss://transformed@{storage_acct_name}.dfs.core.windows.net"
+lvl                 = "lvl1"
+
+# ==== Column names in your data ====
+ID_COL      = "sdr_person_id"
+LABEL_COL   = "label"
+PRED_COL    = "prediction"
+PROB_COL    = "probability"        # Spark Vector [p0, p1]
+
+# ==== Derived paths ====
+base_model_dir  = os.path.join(container_base, lvl, "models", run_name)
+train_scores_dir= os.path.join(base_model_dir, "training-scores", "train")
+test_scores_dir = os.path.join(base_model_dir, "training-scores", "test")
+dt              = datetime.now().strftime("%Y%m%d")
+
+
+##----------- 
+## Helpers 
+##------------
+def with_score(df, prob_col=PROB_COL):
+    """Add `score` = P(class=1). Uses vector_to_array for speed (no Python UDF)."""
+    return df.withColumn("score", vector_to_array(F.col(prob_col))[1].cast("double"))
+
+def select_score_cols(df):
+    """Keep only the columns you want to save for scoring output."""
+    return df.select(ID_COL, PRED_COL, "score", LABEL_COL)
+
+def write_parquet(df, path, coalesce=1, mode="overwrite"):
+    (df.coalesce(coalesce)
+       .write
+       .mode(mode)
+       .option("header", "true")
+       .format("parquet")
+       .save(path))
+
+def compute_basic_metrics(df):
+    """Return a metrics dict using MulticlassMetrics on (prediction, label)."""
+    rdd = df.select(PRED_COL, LABEL_COL).rdd.map(lambda r: (float(r[0]), float(r[1])))
+    mm  = MulticlassMetrics(rdd)
+    m = {
+        "precision_macro": float(mm.precision()),
+        "recall_macro":    float(mm.recall()),
+        "f1_macro":        float(mm.fMeasure()),
+        "precision_0":     float(mm.precision(0.0)),
+        "recall_0":        float(mm.recall(0.0)),
+        "f1_0":            float(mm.fMeasure(0.0)),
+        "precision_1":     float(mm.precision(1.0)),
+        "recall_1":        float(mm.recall(1.0)),
+        "f1_1":            float(mm.fMeasure(1.0)),
+    }
+    return m
+
+def decile_table(df):
+    """
+    Create deciles on score (higher = better) and return:
+    - decile_counts: counts by decile/label/prediction
+    - lift_table: optional wide table with totals
+    """
+    w = Window.orderBy(F.desc("score"))
+    dec = (df
+           .withColumn("decile", F.ntile(10).over(w))
+           .groupBy("decile", LABEL_COL, PRED_COL)
+           .agg(F.count("*").alias("count"))
+          )
+    # Optional wide view (label x decile)
+    lift = (df
+            .withColumn("decile", F.ntile(10).over(w))
+            .groupBy("decile")
+            .agg(F.count(F.when(F.col(LABEL_COL)==1, 1)).alias("positives"),
+                 F.count(F.when(F.col(LABEL_COL)==0, 1)).alias("negatives"),
+                 F.count("*").alias("total"))
+            .orderBy("decile")
+           )
+    return dec, lift
+
+
+##--------
+## Train TEst 
+##_---------
+
+def save_split_outputs(split_name, df_pred, out_dir):
+    """
+    df_pred must have columns: ID_COL, LABEL_COL, PRED_COL, PROB_COL
+    Saves:
+      - scores parquet (id, prediction, score, label)
+      - metrics parquet + json (basic precision/recall/F1)
+      - decile tables parquet (decile_counts + lift_table)
+    """
+    # 1) Prepare scores
+    scored = select_score_cols(with_score(df_pred)).cache()
+    write_parquet(scored, os.path.join(out_dir, f"scores_dt={dt}"))
+
+    # 2) Metrics
+    mets = compute_basic_metrics(scored)
+    metrics_sdf = spark.createDataFrame([{"split": split_name, **mets}])
+    write_parquet(metrics_sdf, os.path.join(out_dir, f"metrics_dt={dt}"))
+    dbutils.fs.put(os.path.join(out_dir, f"metrics_dt={dt}.json"),
+                   json.dumps(mets, indent=2), overwrite=True)
+
+    # 3) Deciles
+    dec, lift = decile_table(scored)
+    write_parquet(dec,  os.path.join(out_dir, f"deciles_dt={dt}"))
+    write_parquet(lift, os.path.join(out_dir, f"lift_dt={dt}"))
+
+    # 4) (Optional) Log to MLflow for traceability
+    with mlflow.start_run(run_name=f"{run_name}:{split_name}", nested=True):
+        for k,v in mets.items():
+            mlflow.log_metric(f"{split_name}_{k}", v)
+
+    scored.unpersist()
+    print(f"✅ {split_name}: wrote scores/metrics/deciles under {out_dir}")
+
+# ====== CALLS (using your existing dataframes) ======
+# You already have:
+#   - training_scores = best_xgb_model.transform(train_df_prep)  (or your loop’s output)
+#   - test_scores     = best_xgb_model.transform(test_df_prep)
+
+save_split_outputs("train", training_scores, train_scores_dir)
+save_split_outputs("test",  test_scores,  test_scores_dir)
+
+
+##------ Ad-hoc analysis 
+
+score_df = (select_score_cols(with_score(test_df_prep.transform(best_xgb_model)))
+            .select(ID_COL, PRED_COL, "score", LABEL_COL))
+
+# Spark-native decile pivot (no pandas warning)
+w = Window.orderBy(F.desc("score"))
+decile_pivot = (score_df
+    .withColumn("decile", F.ntile(10).over(w))
+    .groupBy("decile")
+    .pivot(LABEL_COL, [0.0, 1.0])
+    .agg(F.count("*"))
+    .orderBy("decile")
+    .fillna(0))
+
+display(decile_pivot)
+
+
+
+###==============
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -1636,6 +1786,7 @@ def alternative_imread(img_or_path: Union[np.ndarray, str], flag: str = 'color',
 
 def calculate_rmse(image1: np.ndarray, image2: np.ndarray) -> float:
     return np.sqrt(((image1 - image2) ** 2).mean())
+
 
 
 
