@@ -82,6 +82,103 @@ def decile_table(df):
            )
     return dec, lift
 
+from pyspark.sql import functions as F
+from pyspark.sql import Window
+
+def lift_table_with_cum(df,
+                        score_col="score",
+                        label_col=LABEL_COL,
+                        decile_col="scaled_score",
+                        top_is_1=True):
+    """
+    Returns a Spark DF with per-decile counts and cumulative metrics:
+      decile, positives, negatives, total, pos_rate,
+      cum_positives, cum_population,
+      cum_positive_pct, cum_population_pct,  # cumulative gains curve pieces
+      cum_lift,                               # cumulative lift = cum_positive_pct / cum_population_pct
+      decile_lift                             # per-decile lift vs overall rate
+    """
+    # rank by score (high first)
+    w_rank = Window.orderBy(F.desc(score_col))
+    base_dec = F.ntile(10).over(w_rank)
+    dec_expr = (11 - base_dec) if top_is_1 else base_dec
+
+    # per-decile aggregates
+    agg = (
+        df.withColumn(decile_col, dec_expr)
+          .groupBy(decile_col)
+          .agg(
+              F.sum(F.when(F.col(label_col) == 1, 1).otherwise(0)).alias("positives"),
+              F.sum(F.when(F.col(label_col) == 0, 1).otherwise(0)).alias("negatives"),
+              F.count(F.lit(1)).alias("total")
+          )
+          .orderBy(decile_col)
+    )
+
+    # windows for cumulative + overall totals (stay in Spark)
+    w_cum   = Window.orderBy(decile_col).rowsBetween(Window.unboundedPreceding, Window.currentRow)
+    w_full  = Window.rowsBetween(Window.unboundedPreceding, Window.unboundedFollowing)
+
+    overall_pos_rate = (F.sum("positives").over(w_full) / F.sum("total").over(w_full))
+
+    lift = (
+        agg
+        .withColumn("pos_rate", F.col("positives") / F.col("total"))
+        .withColumn("cum_positives", F.sum("positives").over(w_cum))
+        .withColumn("cum_population", F.sum("total").over(w_cum))
+        .withColumn("cum_positive_pct", F.col("cum_positives") / F.sum("positives").over(w_full))
+        .withColumn("cum_population_pct", F.col("cum_population") / F.sum("total").over(w_full))
+        .withColumn("cum_lift", F.col("cum_positive_pct") / F.col("cum_population_pct"))
+        .withColumn("decile_lift", F.col("pos_rate") / overall_pos_rate)
+    )
+
+    return lift
+
+from pyspark.sql import functions as F
+from pyspark.sql import Window
+
+def decile_pivot_like_john_format(df,
+                                 score_col="score",
+                                 label_col=LABEL_COL,
+                                 pred_col=PRED_COL,
+                                 decile_col="scaled_score",
+                                 top_is_1=True):
+    """
+    Returns a Spark DF with:
+      rows: deciles in column `decile_col` (1..10)
+      columns: '(0, 0)', '(0, 1)', '(1, 0)', '(1, 1)' counts
+    Matches the style you showed in the screenshot.
+    """
+
+    # rank by score (high to low)
+    w = Window.orderBy(F.desc(score_col))
+
+    # ntile 1..10 (1 = highest scores). Flip if you prefer 10 at top.
+    base_dec = F.ntile(10).over(w)
+    dec_expr = (11 - base_dec) if top_is_1 else base_dec
+
+    # build "(label, prediction)" pair as string so we can pivot on it
+    pair_col = F.concat(
+        F.lit("("),
+        F.col(label_col).cast("int"),
+        F.lit(", "),
+        F.col(pred_col).cast("int"),
+        F.lit(")")
+    ).alias("pair")
+
+    # compute deciles + pivot
+    wide = (
+        df
+        .withColumn(decile_col, dec_expr)
+        .withColumn("pair", pair_col)
+        .groupBy(decile_col)
+        .pivot("pair", ["(0, 0)", "(0, 1)", "(1, 0)", "(1, 1)"])
+        .agg(F.count(F.lit(1)).alias("count"))
+        .orderBy(decile_col)
+        .fillna(0)
+    )
+
+    return wide
 
 ##--------
 ## Train TEst 
@@ -147,7 +244,7 @@ display(decile_pivot)
 
 
 
-###==============
+###================================================================================================================================###
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -546,112 +643,6 @@ Day 4 – Advanced Explorations (Propensity Focused)
 		○ Stability check (PSI – Population Stability Index) between HH=1 and HH=0 groups.
 		○ Feature drift: Are some features significantly different distributions between groups?
 Deliverable: Segment insights (e.g., “Cluster 3 = older, frequent PCO visitors, 3x more likely to take HH”).
-
-##=============================== Data ROllup with Demograhic data ===========================
-# --- imports
-from snowflake.snowpark import Session
-from snowflake.snowpark.window import Window
-from snowflake.snowpark.functions import (
-    col, desc, row_number, upper, lit, coalesce,
-    sum as s_sum, max as s_max, when
-)
-
-# --- source and filter for 2024
-df_star_mm = session.table('PCO_CDM.MARKETING_PROTECTED.STAR_MEMBER_MONTH')
-df_2024 = (
-    df_star_mm
-    .filter(col("MSTR_DEMOGR_ID").is_not_null())
-    .filter((col("COV_MONTH") >= 202401) & (col("COV_MONTH") <= 202412))
-)
-
-# -------------------------
-# 1) LATEST SNAPSHOT (per ID)
-# -------------------------
-latest_w = Window.partition_by('MSTR_DEMOGR_ID').order_by(desc('COV_MONTH'))
-
-# choose the “as-of latest month” columns here
-latest_cols = [
-    "MSTR_DEMOGR_ID",
-    "PAT_BIRTH_DT","PAT_GENDER","PAT_LANGUAGE","PAT_RACE","PAT_ETHNICITY",
-    "PAT_MARITAL_STATUS","PAT_ZIP",
-    "PLAN_MARKET","PLAN_REGION",    # if these should be “latest”
-    "MBR_PID"
-]
-df_latest = (
-    df_2024
-    .with_column("rn", row_number().over(latest_w))
-    .filter(col("rn") == 1)
-    .drop("rn")
-    .select([col(c) for c in latest_cols])
-)
-
-# ------------------------------------
-# 2) YEAR ROLL-UPS FOR INDICATOR FIELDS
-# ------------------------------------
-# Indicators with Y/N/NULL at month level
-indicator_cols = [
-    "DUAL_ELIG","LIS_IND","FRAILTY_IND","SNP_IND","HOSPICE_IND",
-    "ESRD_IND","INSTITUTIONAL_IND","NHC_IND","ENGAGED_PAT_IND","PANELIZED"
-]
-
-# Map Y->2, N->1, NULL/other->0, then max() over year.
-# After aggregation: 2 => 'Y'; 1 => 'N'; 0 => NULL
-agg_exprs_ind = []
-for c in indicator_cols:
-    encoded = when(upper(col(c)) == lit('Y'), lit(2)) \
-              .when(upper(col(c)) == lit('N'), lit(1)) \
-              .otherwise(lit(0))
-    agg_exprs_ind.append(s_max(encoded).alias(f"{c}__YN_RANK"))
-
-df_ind_rollup = df_2024.group_by("MSTR_DEMOGR_ID").agg(*agg_exprs_ind)
-
-# decode back to Y/N/NULL and drop helper cols
-for c in indicator_cols:
-    rank_col = f"{c}__YN_RANK"
-    df_ind_rollup = df_ind_rollup.with_column(
-        c,
-        when(col(rank_col) == lit(2), lit('Y'))
-        .when(col(rank_col) == lit(1), lit('N'))
-        .otherwise(lit(None))
-    ).drop(rank_col)
-
-# --------------------------------
-# 3) YEAR ROLL-UPS FOR COUNT FIELDS
-# --------------------------------
-# Sums (NULL treated as 0). Use your actual *_CNT list here.
-count_cols = ["ENGAGED_PAT_CNT","PANELIZED_CNT"]
-
-agg_exprs_cnt = [s_sum(coalesce(col(c), lit(0))).alias(c) for c in count_cols]
-df_cnt_rollup = df_2024.group_by("MSTR_DEMOGR_ID").agg(*agg_exprs_cnt)
-
-# --------------------------------
-# 4) OPTIONAL: LATEST NON-NULL FOR TYPE-LIKE FIELDS
-# --------------------------------
-# Example for SNP_TYPE (categorical that can vary monthly): take latest NON-NULL in 2024
-df_type_latest = (
-    df_2024
-    .filter(col("SNP_TYPE").is_not_null())
-    .with_column("rn", row_number().over(latest_w))
-    .filter(col("rn") == 1)
-    .select(col("MSTR_DEMOGR_ID"), col("SNP_TYPE"))
-)
-
-# -------------------------
-# 5) FINAL JOIN
-# -------------------------
-df_year_features = (
-    df_latest
-    .join(df_ind_rollup, on="MSTR_DEMOGR_ID", how="left")
-    .join(df_cnt_rollup, on="MSTR_DEMOGR_ID", how="left")
-    .join(df_type_latest, on="MSTR_DEMOGR_ID", how="left")   # optional
-)
-
-# Join to your cohort (filtered_common_id_df) and materialize/inspect
-com_with_df_star = filtered_common_id_df.join(df_year_features, on="MSTR_DEMOGR_ID", how="inner")
-
-# Sanity checks
-print("year-level rows:", com_with_df_star.count())
-print("final column count:", len(com_with_df_star.columns))
 
 
 
@@ -1786,6 +1777,7 @@ def alternative_imread(img_or_path: Union[np.ndarray, str], flag: str = 'color',
 
 def calculate_rmse(image1: np.ndarray, image2: np.ndarray) -> float:
     return np.sqrt(((image1 - image2) ** 2).mean())
+
 
 
 
