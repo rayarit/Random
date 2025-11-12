@@ -65,16 +65,29 @@ def quarterly_and_yearly_analysis(base_path, years):
     prev_df = None
     prev_snapshot = None
 
-    # QUARTERLY COMPARISON
-    for snapshot in selected:
-        curr_df = load_snapshot(base_path, snapshot)
-        if prev_df is not None:
-            period = f"{prev_snapshot[:6]}→{snapshot[:6]}"
-            results.append(member_movement(prev_df, curr_df, period))
-        prev_df, prev_snapshot = curr_df, snapshot
+    # # QUARTERLY COMPARISON
+    # for snapshot in selected:
+    #     curr_df = load_snapshot(base_path, snapshot)
+    #     if prev_df is not None:
+    #         period = f"{prev_snapshot[:6]}→{snapshot[:6]}"
+    #         results.append(member_movement(prev_df, curr_df, period))
+    #     prev_df, prev_snapshot = curr_df, snapshot
 
-    # Convert to Spark DataFrame
-    quarterly_df = spark.createDataFrame(results, ["Period", "Retained", "New_Members", "Left_Members"])
+    # # Convert to Spark DataFrame
+    # quarterly_df = spark.createDataFrame(results, ["Period", "Retained", "New_Members", "Left_Members"])
+
+    # QUARTERLY COMPARISON (every 3rd snapshot)
+    quarterly_results = []
+    for i in range(0, len(selected) - 3, 3):   # step by 3
+        snap1 = selected[i]
+        snap2 = selected[i + 3]
+        df1 = load_snapshot(base_path, snap1)
+        df2 = load_snapshot(base_path, snap2)
+        period = f"{snap1[:6]}→{snap2[:6]}"
+        quarterly_results.append(member_movement(df1, df2, period))
+    
+    quarterly_df = spark.createDataFrame(quarterly_results, ["Period", "Retained", "New_Members", "Left_Members"])
+
 
     # YEARLY COMPARISON (if multiple years)
     yearly_results = []
