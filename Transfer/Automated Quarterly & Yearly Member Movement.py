@@ -137,3 +137,75 @@ if quarterly_df:
 if yearly_df:
     print(f"📅 Yearly Member Movement for {LOB.upper()}")
     display(yearly_df)
+
+
+
+##================================================
+
+Hi John,
+
+I’ve completed the analysis of Rx dataset refreshes and member replenishment trends across Medicaid and Medicare within the MLP Feature Store for the 2023–2025 period.
+Below is a consolidated summary of key observations.
+
+🧩 1. Feature Store Refresh Summary
+Year	Medicaid Rx Refreshes	Medicare Rx Refreshes	Commercial Rx Refreshes
+2022	33	40	33
+2023	12	0	12
+2024	12	28	21
+2025	19	19	0
+
+Observations:
+
+All LOBs continue to refresh daily (~7 AM EST).
+
+Medicare shows a strong rebound in refresh activity from 2024 onward, aligning with new Group configurations (A–G).
+
+Commercial refresh frequency dropped in 2025, likely due to limited upstream updates.
+
+👥 2. Medicaid Member Retention (2024→2025)
+Metric	Value
+Retained Members	302,713
+New Members Joined	374,793
+Members Left	215,706
+Total Members (2025)	677,506
+Total Members (2024)	518,419
+
+Derived Metrics:
+
+Metric	Value	Meaning
+Retention Rate	58.4%	% of members retained YoY
+Churn Rate	41.6%	% of members dropped off
+New Member Rate	55.3%	% of active members newly onboarded
+Net Growth Rate	+30.7%	Overall increase in the member base
+
+🟢 Insight:
+Medicaid shows strong member replenishment (+30.7% YoY).
+While retention is moderate, high onboarding compensates for churn, keeping the base healthy and stable.
+
+💊 3. Medicare Member Retention (2024→2025)
+Metric	Value
+Retained Members	5,659,150
+New Members Joined	1,498,832
+Members Left	1,799,151
+Total Members (2025)	7,157,982
+Total Members (2024)	7,458,301
+
+Derived Metrics:
+
+Metric	Value	Meaning
+Retention Rate	75.9%	Good overall member continuity
+Churn Rate	24.1%	Members dropped out YoY
+New Member Rate	20.9%	Share of new members in 2025
+Net Growth Rate	-4.0%	Slight decline in total member base
+
+🟠 Insight:
+Medicare demonstrates strong retention (76%) but slightly negative net growth (-4%) due to a larger outflow than inflow.
+This indicates stable long-term engagement but limited new member entry in 2025.
+
+🧠 4. Overall Observations
+
+Medicaid: Strong growth and active replenishment, moderate retention but expanding base.
+
+Medicare: Higher stability but mild contraction in total base due to limited new onboarding.
+
+Commercial: Pending update; data refresh frequency suggests reduced upstream activity.
