@@ -94,6 +94,24 @@ def quarterly_and_yearly_analysis(base_path, years):
     return quarterly_df, yearly_df
 
 
+from pyspark.sql import functions as F
+
+def add_movement_metrics(df):
+    """
+    Adds retention, churn, new member rate, and net growth percentage metrics.
+    """
+    df = (
+        df.withColumn("Total_Members_Current", F.col("Retained") + F.col("New_Members"))
+          .withColumn("Total_Members_Previous", F.col("Retained") + F.col("Left_Members"))
+          .withColumn("Retention_Rate", (F.col("Retained") / F.col("Total_Members_Previous") * 100))
+          .withColumn("Churn_Rate", (F.col("Left_Members") / F.col("Total_Members_Previous") * 100))
+          .withColumn("New_Member_Rate", (F.col("New_Members") / F.col("Total_Members_Current") * 100))
+          .withColumn("Net_Growth_Rate", ((F.col("Total_Members_Current") - F.col("Total_Members_Previous")) / F.col("Total_Members_Previous") * 100))
+    )
+    return df
+
+
+
 # ---------------------------------------------------------------------------
 # RUN THE ANALYSIS
 # ---------------------------------------------------------------------------
