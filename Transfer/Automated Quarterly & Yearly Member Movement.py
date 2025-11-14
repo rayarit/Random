@@ -48,63 +48,72 @@ def member_movement(prev_df, curr_df, period_name):
     return (period_name, retained, new, left)
 
 
-def quarterly_and_yearly_analysis(base_path, years):
-    """
-    Runs the quarterly + yearly movement analysis automatically for given years.
-    """
+def movement_analysis(base_path, years):
     folders = list_snapshot_folders(base_path)
-    # filter only selected years
     selected = [f for f in folders if int(f[:4]) in years]
     selected = sorted(selected)
 
     if not selected:
         print("⚠️ No matching snapshots found for given years.")
-        return None
+        return None, None, None
 
-    results = []
+    # -------------------------------
+    # MONTHLY MOVEMENT
+    # -------------------------------
+    monthly_results = []
     prev_df = None
     prev_snapshot = None
 
-    # # QUARTERLY COMPARISON
-    # for snapshot in selected:
-    #     curr_df = load_snapshot(base_path, snapshot)
-    #     if prev_df is not None:
-    #         period = f"{prev_snapshot[:6]}→{snapshot[:6]}"
-    #         results.append(member_movement(prev_df, curr_df, period))
-    #     prev_df, prev_snapshot = curr_df, snapshot
+    for snapshot in selected:
+        curr_df = load_snapshot(base_path, snapshot)
+        if prev_df is not None:
+            period = f"{prev_snapshot[:6]}→{snapshot[:6]}"
+            monthly_results.append(member_movement(prev_df, curr_df, period))
+        prev_df, prev_snapshot = curr_df, snapshot
 
-    # # Convert to Spark DataFrame
-    # quarterly_df = spark.createDataFrame(results, ["Period", "Retained", "New_Members", "Left_Members"])
+    monthly_df = spark.createDataFrame(
+        monthly_results,
+        ["Period", "Retained", "New_Members", "Left_Members"]
+    )
 
-    # QUARTERLY COMPARISON (every 3rd snapshot)
+    # -------------------------------
+    # QUARTERLY MOVEMENT (every 3 snapshots)
+    # -------------------------------
     quarterly_results = []
-    for i in range(0, len(selected) - 3, 3):   # step by 3
+    for i in range(0, len(selected) - 3, 3):
         snap1 = selected[i]
         snap2 = selected[i + 3]
         df1 = load_snapshot(base_path, snap1)
         df2 = load_snapshot(base_path, snap2)
         period = f"{snap1[:6]}→{snap2[:6]}"
         quarterly_results.append(member_movement(df1, df2, period))
-    
-    quarterly_df = spark.createDataFrame(quarterly_results, ["Period", "Retained", "New_Members", "Left_Members"])
 
+    quarterly_df = spark.createDataFrame(
+        quarterly_results,
+        ["Period", "Retained", "New_Members", "Left_Members"]
+    )
 
-    # YEARLY COMPARISON (if multiple years)
+    # -------------------------------
+    # YEARLY MOVEMENT
+    # -------------------------------
     yearly_results = []
     year_groups = sorted(set([f[:4] for f in selected]))
 
     if len(year_groups) >= 2:
         for i in range(len(year_groups) - 1):
             y1, y2 = year_groups[i], year_groups[i + 1]
-            # pick first snapshot of each year for comparison
             snap1 = [s for s in selected if s.startswith(y1)][0]
             snap2 = [s for s in selected if s.startswith(y2)][0]
             df1, df2 = load_snapshot(base_path, snap1), load_snapshot(base_path, snap2)
             yearly_results.append(member_movement(df1, df2, f"{y1}→{y2}"))
 
-    yearly_df = spark.createDataFrame(yearly_results, ["Period", "Retained", "New_Members", "Left_Members"]) if yearly_results else None
+    yearly_df = spark.createDataFrame(
+        yearly_results,
+        ["Period", "Retained", "New_Members", "Left_Members"]
+    ) if yearly_results else None
 
-    return quarterly_df, yearly_df
+    return monthly_df, quarterly_df, yearly_df
+
 
 
 from pyspark.sql import functions as F
@@ -128,15 +137,16 @@ def add_movement_metrics(df):
 # ---------------------------------------------------------------------------
 # RUN THE ANALYSIS
 # ---------------------------------------------------------------------------
-quarterly_df, yearly_df = quarterly_and_yearly_analysis(BASE_PATH, YEARS)
+monthly_df, quarterly_df, yearly_df = movement_analysis(BASE_PATH, YEARS)
 
-if quarterly_df:
-    print(f"📊 Quarterly Member Movement for {LOB.upper()}")
-    display(quarterly_df)
+print("📅 MONTHLY MOVEMENT")
+display(monthly_df)
 
-if yearly_df:
-    print(f"📅 Yearly Member Movement for {LOB.upper()}")
-    display(yearly_df)
+print("📊 QUARTERLY MOVEMENT")
+display(quarterly_df)
+
+print("📆 YEARLY MOVEMENT")
+display(yearly_df)
 
 
 
