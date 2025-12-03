@@ -1,4 +1,41 @@
 from pyspark.sql import functions as F
+from pyspark.ml.functions import vector_to_array
+from pyspark.sql.window import Window
+
+# 1. Extract propensity score (probability of class 1)
+new_pred_df = prediction.withColumn(
+    "probability_array", vector_to_array("probability")
+).withColumn(
+    "propensity_score", F.col("probability_array")[1].cast("double")
+)
+
+# 2. Create deciles
+window = Window.orderBy(F.col("propensity_score").desc())
+new_pred_df = new_pred_df.withColumn("decile", F.ntile(10).over(window))
+
+# 3. Decile summary table
+decile_table = (
+    new_pred_df.groupBy("decile")
+               .agg(
+                    F.count("*").alias("total_customers"),
+                    F.sum("prediction").alias("total_positives"),
+                    F.avg("propensity_score").alias("avg_propensity")
+                )
+               .orderBy("decile")
+)
+
+decile_table.show()
+
+# (Optional) Prediction distribution inside deciles
+new_pred_df.groupBy("decile", "prediction") \
+           .count() \
+           .orderBy("decile", "prediction") \
+           .show()
+
+
+
+##=========================
+from pyspark.sql import functions as F
 from pyspark.sql import Window
 from pyspark.ml.functions import vector_to_array
 from pyspark.mllib.evaluation import MulticlassMetrics
@@ -1777,6 +1814,7 @@ def alternative_imread(img_or_path: Union[np.ndarray, str], flag: str = 'color',
 
 def calculate_rmse(image1: np.ndarray, image2: np.ndarray) -> float:
     return np.sqrt(((image1 - image2) ** 2).mean())
+
 
 
 
