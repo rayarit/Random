@@ -1,3 +1,29 @@
+# rename columns first
+old_df = old_pred_df.select(
+    "sdr_person_id",
+    F.col("decile").alias("old_decile")
+)
+
+new_df = new_pred_df.select(
+    "sdr_person_id",
+    F.col("decile").alias("new_decile"),
+    "prob_positive"
+)
+
+# join
+comparison_df = new_df.join(old_df, on="sdr_person_id", how="inner")
+
+display(
+    comparison_df.select(
+        "sdr_person_id",
+        "old_decile",
+        "new_decile",
+        "prob_positive"
+    )
+)
+
+
+
 from pyspark.sql import functions as F
 from pyspark.ml.functions import vector_to_array
 from pyspark.sql.window import Window
@@ -1814,6 +1840,7 @@ def alternative_imread(img_or_path: Union[np.ndarray, str], flag: str = 'color',
 
 def calculate_rmse(image1: np.ndarray, image2: np.ndarray) -> float:
     return np.sqrt(((image1 - image2) ** 2).mean())
+
 
 
 
