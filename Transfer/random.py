@@ -1,4 +1,35 @@
+Subject: HH Rescoring & Decile Movement Analysis – Summary
 
+Hi John,
+
+As discussed, we previously scored ~1.4M members. From this population, we isolated ~1.05M non-converter members whose prior-quarter propensity score was < 0.5.
+This subset represents the low-to-moderate–risk segment, which is the targeted cohort for outreach.
+We then rescored only this filtered group using the latest quarter’s features.
+
+I’ve attached:
+
+The rescored member table
+
+The analysis workbook containing transition matrix, movement metrics, and supporting visuals
+
+Key insights from the rescoring analysis:
+
+Scope clarification: All results below apply only to members with prior scores < 0.5, i.e., the low-risk to mid-risk cohort. Naturally, this group will show more upward movement because high-risk members (>=0.5) are excluded.
+
+Decile stability: The decile transition matrix shows a strong diagonal pattern, indicating that score ordering is largely preserved quarter-over-quarter for this cohort.
+
+Average movement: Members shift by an average of 1.4 deciles, which is consistent with expected quarterly feature drift and does not indicate instability.
+
+Movement distribution:
+
+~61% of members moved up (improved, shifted to a lower-risk decile)
+
+~27% moved down (higher-risk decile)
+
+~12% remained in the same decile
+This movement pattern is expected given the cohort selection (<0.5 group tends to have more upward mobility).
+
+Overall takeaway: The rescoring behavior is stable and feature-driven, with no abnormal drift or discontinuity. This supports using quarterly rescoring for campaign selection within the non-converter population.
 
 """
 
@@ -1042,6 +1073,7 @@ def alternative_imread(img_or_path: Union[np.ndarray, str], flag: str = 'color',
 
 def calculate_rmse(image1: np.ndarray, image2: np.ndarray) -> float:
     return np.sqrt(((image1 - image2) ** 2).mean())
+
 
 
 
