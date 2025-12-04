@@ -1,3 +1,58 @@
+def export_and_get_link(df, file_name, file_format="csv", folder="exports", **kwargs):
+    """
+    Save a Spark dataframe to DBFS FileStore and return a download link.
+    
+    Parameters:
+        df (DataFrame): Spark DataFrame to save
+        file_name (str): Desired file name (e.g., "prediction.csv")
+        file_format (str): Format to save ("csv", "parquet", "json")
+        folder (str): Folder under FileStore (default = "exports")
+        **kwargs: Additional writer options (header=True, delimiter=",", etc.)
+
+    Returns:
+        str: Direct browser download link
+    """
+
+    # ----------------------------------------------------------------------
+    # 1. Build FileStore path
+    # ----------------------------------------------------------------------
+    dbfs_dir = f"dbfs:/FileStore/{folder}"
+    dbutils.fs.mkdirs(dbfs_dir)
+
+    # For formats that generate multiple part files, manage naming separately
+    save_path = f"{dbfs_dir}/{file_name}" if file_format != "csv" else f"{dbfs_dir}/{file_name.replace('.csv', '')}"
+
+    # ----------------------------------------------------------------------
+    # 2. Write file
+    # ----------------------------------------------------------------------
+    if file_format == "csv":
+        df.coalesce(1).write.mode("overwrite").csv(save_path, **kwargs)
+        
+        # Get the written part file
+        files = dbutils.fs.ls(save_path)
+        part_file = [f.path for f in files if f.name.startswith("part-")][0]
+
+        final_path_dbfs = f"dbfs:/FileStore/{folder}/{file_name}"
+        
+        # Rename part-file → final file name
+        dbutils.fs.mv(part_file, final_path_dbfs)
+    
+    else:
+        df.write.mode("overwrite").format(file_format).save(save_path)
+        final_path_dbfs = save_path
+
+    # ----------------------------------------------------------------------
+    # 3. Build public browser download link
+    # ----------------------------------------------------------------------
+    instance = dbutils.notebook.entry_point.getDbutils().notebook().getContext().browserHostName().get()
+    
+    # FileStore is accessible via /files/
+    download_link = f"https://{instance}/files/{folder}/{file_name}"
+
+    return download_link
+
+
+##==============================
 # rename columns first
 old_df = old_pred_df.select(
     "sdr_person_id",
@@ -1840,6 +1895,7 @@ def alternative_imread(img_or_path: Union[np.ndarray, str], flag: str = 'color',
 
 def calculate_rmse(image1: np.ndarray, image2: np.ndarray) -> float:
     return np.sqrt(((image1 - image2) ** 2).mean())
+
 
 
 
