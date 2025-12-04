@@ -10,21 +10,6 @@ new_df = new_pred_df.select(
     "prob_positive"
 )
 
-
-Subject: Summary of HH Movement Analysis & Quarterly Scorable Volume
-
-Hi Team,
-
-From the recent HH movement analysis, the key insights are as follows:
-
-Our scorable HH population remains stable at ~22K to 32K per quarter.
-
-The total annual scorable volume is ~118K HH, which is sufficient for continuous model scoring and campaign execution.
-
-Overall, the quarterly HH base shows consistent stability.
-
-Based on this, running regular quarterly campaigns is feasible and well-supported by the data.
-
 # join
 comparison_df = new_df.join(old_df, on="sdr_person_id", how="inner")
 
@@ -1855,6 +1840,7 @@ def alternative_imread(img_or_path: Union[np.ndarray, str], flag: str = 'color',
 
 def calculate_rmse(image1: np.ndarray, image2: np.ndarray) -> float:
     return np.sqrt(((image1 - image2) ** 2).mean())
+
 
 
 
