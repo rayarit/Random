@@ -1,8 +1,3 @@
-
-The table shared earlier was based on a non-sequential (independent horizon) comparison, where the August Top-3 cohort was evaluated separately against Sep/Oct/Nov deciles. Under that approach, members can drop out and re-enter, which is why outflow rates appeared relatively flat across horizons.
-
-To address this, I’ve added a sequential / no-reentry retention and outflow table (attached). In this view, once a member exits Top-3, they are treated as permanently outflowed. This results in:
-
 ##============ Movement Analysis ================
 
 from pyspark.sql.functions import col, when
@@ -1144,6 +1139,7 @@ def alternative_imread(img_or_path: Union[np.ndarray, str], flag: str = 'color',
 
 def calculate_rmse(image1: np.ndarray, image2: np.ndarray) -> float:
     return np.sqrt(((image1 - image2) ** 2).mean())
+
 
 
 
