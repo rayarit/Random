@@ -83,6 +83,20 @@ reentry = joined.filter(
     (col("oct_top3") == 1)
 ).count()
 
+##==================
+## Build the final table 
+##=====================
+from pyspark.sql import Row
+
+result_rows = [
+    Row(Stage="Aug Top-3", Members=N0, Retention_Pct=1.0),
+    Row(Stage="Still Top-3 in Sep", Members=N1, Retention_Pct=N1 / N0 if N0 else 0),
+    Row(Stage="Still Top-3 in Oct", Members=N2, Retention_Pct=N2 / N0 if N0 else 0),
+    Row(Stage="Still Top-3 in Nov", Members=N3, Retention_Pct=N3 / N0 if N0 else 0),
+]
+
+result_df = spark.createDataFrame(result_rows)
+
 ##==========================End =========================
 
 from utils.utils_ import paint_vid, add_text_to_frames
@@ -1125,6 +1139,7 @@ def alternative_imread(img_or_path: Union[np.ndarray, str], flag: str = 'color',
 
 def calculate_rmse(image1: np.ndarray, image2: np.ndarray) -> float:
     return np.sqrt(((image1 - image2) ** 2).mean())
+
 
 
 
