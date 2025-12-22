@@ -1,4 +1,89 @@
+##============ Movement Analysis ================
 
+from pyspark.sql.functions import col, when
+##===========================
+## Define business flags once
+##===========================
+def add_flags(df):
+    return (
+        df
+        .withColumn("aug_top3", when(col("old_decile") <= 3, 1).otherwise(0))
+        .withColumn("new_top3", when(col("new_decile") <= 3, 1).otherwise(0))
+    )
+
+sept = add_flags(final_df_sept)
+oct  = add_flags(final_df_oct)
+nov  = add_flags(final_df_nov)
+##=================================================
+
+##=================================================================
+##“Where does the Aug Top-3 cohort land at different horizons? (independently)
+##======================================================================
+def independent_metrics(df):
+    base = df.filter(col("aug_top3") == 1)
+    total = base.count()
+    retained = base.filter(col("new_top3") == 1).count()
+    outflow = total - retained
+
+    return {
+        "base": total,
+        "retained": retained,
+        "retained_pct": retained / total,
+        "outflow_pct": outflow / total
+    }
+
+
+##============================
+##Sequential retention
+##==========================
+## Creating single join table 
+from functools import reduce
+
+base_cols = ["sdr_person_id", "aug_top3", "new_top3"]
+
+sept_s = sept.select("sdr_person_id", col("new_top3").alias("sep_top3"))
+oct_s  = oct.select("sdr_person_id", col("new_top3").alias("oct_top3"))
+nov_s  = nov.select("sdr_person_id", col("new_top3").alias("nov_top3"))
+
+base = sept.select("sdr_person_id", "aug_top3")
+
+joined = (
+    base
+    .join(sept_s, "sdr_person_id")
+    .join(oct_s, "sdr_person_id")
+    .join(nov_s, "sdr_person_id")
+    .filter(col("aug_top3") == 1)
+)
+
+
+##========================
+## Apply sequential logic 
+##========================
+seq = (
+    joined
+    .withColumn("sep_retained", col("sep_top3"))
+    .withColumn("oct_retained", when((col("sep_retained") == 1) & (col("oct_top3") == 1), 1).otherwise(0))
+    .withColumn("nov_retained", when((col("oct_retained") == 1) & (col("nov_top3") == 1), 1).otherwise(0))
+)
+
+##+==============
+## Compute Waterfall metric 
+##+====================
+N0 = seq.count()
+N1 = seq.filter(col("sep_retained") == 1).count()
+N2 = seq.filter(col("oct_retained") == 1).count()
+N3 = seq.filter(col("nov_retained") == 1).count()
+
+
+##========================
+##Re-entry analysis (explains your earlier confusion)
+##==================
+reentry = joined.filter(
+    (col("sep_top3") == 0) &
+    (col("oct_top3") == 1)
+).count()
+
+##==========================End =========================
 
 from utils.utils_ import paint_vid, add_text_to_frames
 from utils.trainer import getTrainParams
@@ -1040,6 +1125,7 @@ def alternative_imread(img_or_path: Union[np.ndarray, str], flag: str = 'color',
 
 def calculate_rmse(image1: np.ndarray, image2: np.ndarray) -> float:
     return np.sqrt(((image1 - image2) ** 2).mean())
+
 
 
 
