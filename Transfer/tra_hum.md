@@ -192,3 +192,40 @@ Close the Snowpark session at the end.
 Suggest points of extension (e.g., drift detection, anomaly detection, ML model prepping).
 Target Audience: Analytics engineers, data scientists, ML engineers onboarding new Snowflake tables.
 Do not hardcode column names; infer all logic dynamically.
+
+
+##+=======================
+
+Hi Team,
+
+As we reviewed the current outreach and enrollment data for forecasting, a few structural issues make it difficult to directly use for modeling:
+
+1. Data is at daily/event level with duplicate member occurrences across dates and scripts.
+2. Members can appear across multiple waves and days, making direct outreach → enrollment mapping inconsistent.
+3. Enrollment happens with a time lag from outreach, but this linkage is not standardized in the current dataset.
+4. Current structure is not suitable for time-series models (SARIMA/Prophet/Holt-Winters), which require aggregated and stable time-based inputs.
+
+To proceed, we need a **weekly aggregated dataset** at the following grain:
+
+**week_start_date × wave_number**
+
+Required fields:
+
+* week_start_date
+* wave_number
+* total_outreached_members (distinct within week + wave)
+* total_outreached_scripts (count)
+* total_enrolled_members (distinct within week + wave)
+* total_enrolled_scripts (count)
+
+Key rules:
+
+* Distinct member counts within the same week and wave
+* Members can appear across different waves or weeks
+* Enrollment should be aligned to the week it occurred (with outreach lag handled during aggregation)
+
+**Modeling approach (high level):**
+We plan to use the weekly dataset to build enrollment forecasts for the next 3 months using time-series models (SARIMA/Prophet/Holt-Winters) with outreach and wave as drivers.
+
+Please let us know if this aggregation can be prepared or if any source-level constraints exist.
+
