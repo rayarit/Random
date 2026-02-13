@@ -196,36 +196,73 @@ Do not hardcode column names; infer all logic dynamically.
 
 ##+=======================
 
-Hi Team,
+Objective
+The current objective is to forecast weekly Enrolled Scripts for the next ~12 weeks (≈ 3 months) using historical outreach and enrollment data.
 
-As we reviewed the current outreach and enrollment data for forecasting, a few structural issues make it difficult to directly use for modeling:
+Proposed Modeling Approach
 
-1. Data is at daily/event level with duplicate member occurrences across dates and scripts.
-2. Members can appear across multiple waves and days, making direct outreach → enrollment mapping inconsistent.
-3. Enrollment happens with a time lag from outreach, but this linkage is not standardized in the current dataset.
-4. Current structure is not suitable for time-series models (SARIMA/Prophet/Holt-Winters), which require aggregated and stable time-based inputs.
+Driver-based forecasting instead of pure time-series modeling
+Enrollment scripts are primarily driven by outreach activity rather than time alone. Therefore, the model will use OUTREACHED_SCRIP as the primary predictor, with time acting as a secondary signal.
 
-To proceed, we need a **weekly aggregated dataset** at the following grain:
+Panel-level modeling (Week × Channel × Wave)
+Data will be modeled at the weekly–channel–wave level, rather than aggregated totals, to preserve campaign-level conversion behavior and improve forecast accuracy.
 
-**week_start_date × wave_number**
+Incorporating temporal momentum using lag features
+Lag variables (e.g., previous week enrollment and outreach) will be created to capture short-term persistence and delayed conversion effects, which are common in campaign-driven enrollment systems.
 
-Required fields:
+Use of a simple, robust ML regression model
+A tree-based regression model (e.g., Random Forest or Gradient Boosting) will be used because it:
 
-* week_start_date
-* wave_number
-* total_outreached_members (distinct within week + wave)
-* total_outreached_scripts (count)
-* total_enrolled_members (distinct within week + wave)
-* total_enrolled_scripts (count)
+handles nonlinear outreach-to-enrollment relationships
 
-Key rules:
+supports categorical variables (channel, wave)
 
-* Distinct member counts within the same week and wave
-* Members can appear across different waves or weeks
-* Enrollment should be aligned to the week it occurred (with outreach lag handled during aggregation)
+performs well with limited historical data
 
-**Modeling approach (high level):**
-We plan to use the weekly dataset to build enrollment forecasts for the next 3 months using time-series models (SARIMA/Prophet/Holt-Winters) with outreach and wave as drivers.
+enables scenario simulation
 
-Please let us know if this aggregation can be prepared or if any source-level constraints exist.
+Scenario-ready forecasting design
+The model will be built so that future enrollment forecasts can be generated from planned outreach inputs, allowing estimation of the incremental impact of new campaigns.
 
+##======================
+### Forecasting Approach — Enrollment Scripts
+
+For weekly script enrollment forecasting, we will use a **driver-based regression forecasting approach** in addition to time-series models.
+
+The regression model will use the following features:
+
+* `week_index`
+* `OUTREACHED_SCRIP`
+* `lag1_enrolled`
+* `CHANNEL`
+* `WAVE_NUMB`
+
+**Reasoning**
+
+These features allow the model to capture three important components of enrollment behavior:
+
+* **Temporal behavior** → `week_index`, `lag1_enrolled`
+* **Campaign intensity / outreach effect** → `OUTREACHED_SCRIP`
+* **Channel and wave conversion differences** → `CHANNEL`, `WAVE_NUMB`
+
+Since script enrollment is primarily **outreach-driven rather than purely time-driven**, a regression approach is expected to better capture the **outreach-to-conversion relationship** compared to using SARIMA alone.
+
+**Modeling plan**
+
+We will evaluate multiple approaches:
+
+* SARIMA
+* SARIMAX (with outreach as exogenous variable)
+* Regression models (e.g., Random Forest / Gradient Boosting)
+
+The **final model will be selected based on forecast performance metrics (e.g., MAPE), stability across weeks, and ability to support scenario-based forecasting**.
+
+
+New campaigns can be incorporated by adding the **estimated outreach scripts as future input values** to the forecasting model. Since outreach is treated as a primary driver of enrollment, the model can generate predicted enrollment scripts based on the planned campaign volume.
+
+To show impact, we can run two forecasts:
+
+* **Baseline forecast** using existing outreach plans
+* **Scenario forecast** including the new campaign outreach
+
+The **difference between the two forecasts represents the estimated incremental enrollment impact of the new campaign**, which can be reported at weekly or total-period level.
