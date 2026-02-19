@@ -1,3 +1,168 @@
+
+## model 1 
+import pandas as pd
+import numpy as np
+
+from sklearn.metrics import mean_squared_error, mean_absolute_percentage_error
+import xgboost as xgb
+
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+df_uni = df.copy()
+df_uni = df_uni.sort_values(['series_id','date'])
+
+LAGS = [1,2,3,4,12]
+
+for lag in LAGS:
+    df_uni[f'lag_{lag}'] = (
+        df_uni.groupby('series_id')['ENROLLED_SCRIPTS']
+        .shift(lag)
+    )
+
+df_uni = df_uni.dropna()
+
+
+## train val 
+cutoff = df_uni['date'].max() - pd.Timedelta(weeks=13)
+
+train = df_uni[df_uni['date'] <= cutoff]
+val   = df_uni[df_uni['date'] > cutoff]
+
+FEATURES_A = [f'lag_{l}' for l in LAGS]
+TARGET = 'ENROLLED_SCRIPTS'
+
+
+## train model 
+
+model_A = xgb.XGBRegressor(
+    n_estimators=500,
+    max_depth=5,
+    learning_rate=0.05
+)
+
+model_A.fit(train[FEATURES_A], train[TARGET])
+
+
+## Evaluate 
+pred_A = model_A.predict(val[FEATURES_A])
+
+rmse_A = np.sqrt(mean_squared_error(val[TARGET], pred_A))
+mape_A = mean_absolute_percentage_error(val[TARGET], pred_A)
+
+resid_A = val[TARGET] - pred_A
+std_A = np.std(resid_A)
+
+print("MODEL A — Univariate")
+print("RMSE:", rmse_A)
+print("MAPE:", mape_A)
+print("RMSE/STD:", rmse_A/std_A)
+
+
+## Mdel B Sarima 
+results = []
+
+for sid in df['series_id'].unique():
+
+    temp = df[df['series_id']==sid].sort_values('date')
+
+    y = temp['ENROLLED_SCRIPTS']
+
+    train_y = y[:-13]
+    val_y   = y[-13:]
+
+    model = SARIMAX(
+        train_y,
+        order=(1,1,1),
+        seasonal_order=(1,1,1,52),
+        enforce_stationarity=False,
+        enforce_invertibility=False
+    )
+
+    res = model.fit(disp=False)
+
+    pred = res.forecast(13)
+
+    rmse = np.sqrt(mean_squared_error(val_y, pred))
+    mape = mean_absolute_percentage_error(val_y, pred)
+
+    results.append([sid, rmse, mape])
+
+## AGgregate sarima metric s1sarima_df = pd.DataFrame(
+    results,
+    columns=['series_id','RMSE','MAPE']
+)
+
+print("MODEL B — SARIMA")
+print("Avg RMSE:", sarima_df['RMSE'].mean())
+print("Avg MAPE:", sarima_df['MAPE'].mean())
+
+## Mdoel c Biavariate 
+df_bi = df.copy()
+df_bi = df_bi.sort_values(['series_id','date'])
+
+# Enrollment lags
+for lag in [1,2,3,4,12]:
+    df_bi[f'lag_{lag}'] = (
+        df_bi.groupby('series_id')['ENROLLED_SCRIPTS']
+        .shift(lag)
+    )
+
+# Outreach lags
+for lag in [0,1,2,3]:
+    df_bi[f'outreach_lag_{lag}'] = (
+        df_bi.groupby('series_id')['OUTREACHED_SCRIPTS']
+        .shift(lag)
+    )
+
+df_bi = df_bi.dropna()
+
+#Split 
+cutoff = df_bi['date'].max() - pd.Timedelta(weeks=13)
+
+train = df_bi[df_bi['date'] <= cutoff]
+val   = df_bi[df_bi['date'] > cutoff]
+
+FEATURES_C = [
+    col for col in df_bi.columns
+    if 'lag' in col
+]
+
+# Train model_C = xgb.XGBRegressor(
+    n_estimators=700,
+    max_depth=6,
+    learning_rate=0.04
+)
+
+model_C.fit(train[FEATURES_C], train[TARGET])
+
+# Evaluate 
+pred_C = model_C.predict(val[FEATURES_C])
+
+rmse_C = np.sqrt(mean_squared_error(val[TARGET], pred_C))
+mape_C = mean_absolute_percentage_error(val[TARGET], pred_C)
+
+resid_C = val[TARGET] - pred_C
+std_C = np.std(resid_C)
+
+print("MODEL C — Bivariate")
+print("RMSE:", rmse_C)
+print("MAPE:", mape_C)
+print("RMSE/STD:", rmse_C/std_C)
+
+
+# Final Table 
+summary = pd.DataFrame({
+    "Model": ["Univariate ML","SARIMA","Bivariate ML"],
+    "RMSE": [rmse_A, sarima_df['RMSE'].mean(), rmse_C],
+    "MAPE": [mape_A, sarima_df['MAPE'].mean(), mape_C]
+})
+
+summary
+
+
+
+
+
+#===============================================================
 # Step 1 — Imports
 import pandas as pd
 import numpy as np
@@ -270,3 +435,4 @@ for step in range(HORIZON):
 forecast_13w = pd.concat(future_preds, ignore_index=True)
 
 forecast_13w.head()
+
