@@ -141,39 +141,132 @@ search.fit(train_df[FEATURES], train_df[TARGET])
 best_model = search.best_estimator_
 
 ## 1️⃣4️⃣ 13-Week Forecasting (Recursive)
+import numpy as np
+import pandas as pd
+
+HORIZON = 13
 future_preds = []
 
 last_df = df_model.copy()
 
-for i in range(13):
+# Ensure sorted for correct tail/rolling behavior
+last_df = last_df.sort_values(['series_id', 'date']).reset_index(drop=True)
 
-    # Create next week date
+min_date = last_df['date'].min()
+
+for step in range(HORIZON):
+
+    # Next forecast date (global weekly step)
     next_date = last_df['date'].max() + pd.Timedelta(weeks=1)
 
-    temp = last_df.groupby('series_id').tail(1).copy()
+    # Base row for each series = last known row
+    temp = (
+        last_df.sort_values(['series_id', 'date'])
+              .groupby('series_id', as_index=False)
+              .tail(1)
+              .copy()
+    )
+
+    # Set future date
     temp['date'] = next_date
 
-    # Recompute lag features
+    # -------------------------
+    # Recompute time features (match what you used in training)
+    # -------------------------
+    temp['weekofyear'] = temp['date'].dt.isocalendar().week.astype(int)
+    temp['sin_week'] = np.sin(2 * np.pi * temp['weekofyear'] / 52)
+    temp['cos_week'] = np.cos(2 * np.pi * temp['weekofyear'] / 52)
+
+    # Trend index (weekly)
+    temp['time_idx'] = ((temp['date'] - min_date).dt.days // 7).astype(int)
+
+    # -------------------------
+    # Recompute lag features per series (SAFE alignment)
+    # -------------------------
     for lag in LAGS:
-        temp[f'lag_{lag}'] = (
+        lag_series = (
             last_df.groupby('series_id')['ENROLLED_SCRIPTS']
-            .shift(lag)
-            .iloc[-len(temp):]
-            .values
+                   .shift(lag)
+        )
+        # take the latest lag value per series (align with temp rows)
+        temp[f'lag_{lag}'] = (
+            pd.concat([last_df[['series_id']], lag_series.rename('v')], axis=1)
+              .sort_values(['series_id'])
+              .groupby('series_id')
+              .tail(1)['v']
+              .values
         )
 
-    temp['rolling_mean_4'] = last_df.groupby(
-        'series_id')['ENROLLED_SCRIPTS'].tail(4).mean().values
+    # -------------------------
+    # Recompute rolling stats per series (SAFE alignment)
+    # -------------------------
+    roll_mean_4 = (
+        last_df.groupby('series_id')['ENROLLED_SCRIPTS']
+               .rolling(4)
+               .mean()
+               .reset_index(level=0, drop=True)
+    )
 
-    # Predict
+    temp['rolling_mean_4'] = (
+        pd.concat([last_df[['series_id']], roll_mean_4.rename('v')], axis=1)
+          .sort_values(['series_id'])
+          .groupby('series_id')
+          .tail(1)['v']
+          .values
+    )
+
+    # If you also trained with rolling_std_4, compute it too
+    if 'rolling_std_4' in FEATURES or 'rolling_std_4' in temp.columns:
+        roll_std_4 = (
+            last_df.groupby('series_id')['ENROLLED_SCRIPTS']
+                   .rolling(4)
+                   .std()
+                   .reset_index(level=0, drop=True)
+        )
+        temp['rolling_std_4'] = (
+            pd.concat([last_df[['series_id']], roll_std_4.rename('v')], axis=1)
+              .sort_values(['series_id'])
+              .groupby('series_id')
+              .tail(1)['v']
+              .values
+        )
+
+    # -------------------------
+    # IMPORTANT:
+    # If you used exogenous variables that are UNKNOWN in the future
+    # (e.g., OUTREACHED_SCRIPTS), you must decide how to fill them.
+    # Option A (simple): keep last observed value per series
+    # Option B: set to 0 / planned campaign values
+    # -------------------------
+    if 'OUTREACHED_SCRIPTS' in temp.columns and 'OUTREACHED_SCRIPTS' in FEATURES:
+        # Keep last known outreach per series (baseline assumption)
+        temp['OUTREACHED_SCRIPTS'] = (
+            last_df.sort_values(['series_id', 'date'])
+                  .groupby('series_id')['OUTREACHED_SCRIPTS']
+                  .tail(1)
+                  .values
+        )
+
+    # -------------------------
+    # Predict next step
+    # -------------------------
+    # Ensure all FEATURES exist in temp
+    missing = [c for c in FEATURES if c not in temp.columns]
+    if missing:
+        raise ValueError(f"Missing required features in temp: {missing}")
+
     temp['pred'] = model.predict(temp[FEATURES])
 
+    # Feed prediction back as ENROLLED_SCRIPTS for next step lags
     temp['ENROLLED_SCRIPTS'] = temp['pred']
 
-    future_preds.append(temp)
-    last_df = pd.concat([last_df, temp])
+    # Save and append to last_df for next iteration
+    future_preds.append(temp[['series_id', 'date', 'pred']].copy())
 
-## 1️⃣5️⃣ Final Forecast Output
-forecast_13w = pd.concat(future_preds)
+    last_df = pd.concat([last_df, temp], ignore_index=True)
+    last_df = last_df.sort_values(['series_id', 'date']).reset_index(drop=True)
 
-forecast_13w[['series_id','date','pred']]
+# Final 13-week forecast dataframe
+forecast_13w = pd.concat(future_preds, ignore_index=True)
+
+forecast_13w.head()
