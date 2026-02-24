@@ -1,3 +1,129 @@
+Objective
+
+Build an automated weekly forecasting system to predict the next 13 weeks (3 months) of Enrolled Scripts at the granularity of:
+
+Week × Campaign × Channel
+
+The objective is to forecast campaign-driven enrollment performance and support outreach planning and operational decision-making.
+
+Assumptions (2–4 lines as asked)
+
+Campaign schedules for the forecast horizon are known.
+
+Outreach activity is a key driver of enrollment conversion.
+
+Baseline enrollment exists independent of campaign activity.
+
+Campaign performance remains reasonably stable across years.
+
+Data Structure & Input
+
+The dataset is structured as a weekly panel across campaign and channel dimensions.
+
+Key inputs include:
+
+Week / Date
+
+Campaign ID
+
+Channel (Email, SMS, Print, etc.)
+
+Enrolled Scripts (target variable)
+
+Outreach Scripts volume
+
+Campaign active indicators
+
+Time-based features (week-of-year, seasonal signals)
+
+A minimum of 2–3 years of historical weekly data is required to capture campaign recurrence patterns and baseline seasonality. 
+
+knowledge2
+
+Modeling Approach
+
+Two modeling approaches are evaluated before final recommendation:
+
+Approach 1 — Time-Series with Exogenous Drivers
+
+Uses models like SARIMAX where enrollment is forecasted using:
+
+Historical enrollment trend
+
+Campaign indicators
+
+Outreach volume
+
+Seasonal components
+
+This approach captures temporal dependency but assumes additive campaign effects.
+
+Approach 2 — Panel Regression / Causal Impact Modeling
+
+Treats the problem as an interventional regression framework:
+
+Baseline enrollment extracted via decomposition
+
+Campaign indicators model incremental uplift
+
+Outreach models conversion elasticity
+
+Lag features capture delayed response
+
+This approach enables causal interpretation of campaign effectiveness.
+
+Recommended Framework
+
+A hybrid multi-stage pipeline combining both views:
+
+Baseline demand extraction
+
+Campaign uplift regression modeling
+
+Future enrollment simulation using campaign calendar + outreach plan
+
+This structure separates organic demand from campaign-driven impact. 
+
+knowledge2
+
+Output
+
+The forecasting system produces predictions at:
+
+Week × Campaign × Channel level
+
+Key deliverables include:
+
+13-week enrolled script forecast
+
+Campaign incremental impact estimates
+
+Baseline vs campaign-driven split
+
+Channel-level performance outlook
+
+Forecast accuracy metrics (RMSE, MAPE)
+
+🧠 Notes (why this framing is correct)
+
+This version now correctly reflects:
+
+Campaign-level causality focus
+
+Outreach dependency
+
+Interventional forecasting design
+
+Need for 2–3 years campaign recurrence data
+
+Multi-approach evaluation before final model selection
+
+All aligned to the MD reasoning document.
+
+
+
+
+
 
 ## model 1 
 import pandas as pd
@@ -435,4 +561,5 @@ for step in range(HORIZON):
 forecast_13w = pd.concat(future_preds, ignore_index=True)
 
 forecast_13w.head()
+
 
